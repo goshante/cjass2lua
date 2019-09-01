@@ -1,77 +1,49 @@
 #pragma once
 
 #include <string>
-#include <list>
 #include <vector>
-#include <memory>
-#include "singleton.h"
+#include <set>
+#include "cJassNodes.h"
+#include "defs.h"
 
 namespace cJass
 {
-	class Node;
-	using NodePtr = std::shared_ptr<Node>;
-	using NodeList = std::list<NodePtr>;
-	using NL_iter = NodeList::iterator;
-
-	class Node
-	{
-	public:
-		enum class Type
-		{
-			Undefined,
-			GlobalSpace,
-			Function
-		};
-
-	protected:
-		bool _isNewLine;
-		size_t _tabs;
-
-	private:
-		Type _type;
-		NodeList _subnodes;
-		NodePtr _top;
-		NL_iter _it;
-
-		Node(Node&) = delete;
-
-	public:
-		Node(Type type = Type::Undefined, NodePtr top = nullptr);
-		void AddSubnode(NodePtr node);
-		Type GetType() const;
-
-		NodePtr IterateSubnodes();
-		void ResetIterator();
-		virtual std::string ToLua() = 0;
-		virtual void ConstructFrom(const std::string cjCode) = 0;
-	};
-
-	class GlobalSpace : public Node
-	{
-	public:
-		GlobalSpace();
-		virtual std::string ToLua() override;
-		virtual void ConstructFrom(const std::string cjCode) override;
-	};
-
-	class Function : public Node
+	class Parser
 	{
 	private:
-		std::string _name;
-		std::string _returnType;
-		std::string _args;
+		std::string _text;
+		bool _typenameAssigning;
+		int _depth;
+		size_t _index;
+		ranges_t _stringRanges;
+		ranges_t _commentRanges;
+		std::set<size_t> _parsedComments;
+		GlobalSpace _rootNode;
+		Node* _activeNode;
+		tagstack_t _tags;
+		ParseTag_t _lastBlock;
+
+		Parser(const Parser&) = delete;
+		Parser& operator=(const Parser&) = delete;
+
+		std::string _getCommentByRandomIndex(size_t i);
+		bool _isCommentParsed(size_t i);
+
+		void _findRanges();
+		void _removeJunk();
+		line_t _nextLine(size_t off);
+		std::string _nextPart();
+		ParseResult_t _parseLine(line_t& line);
+		std::string _normalizeLine(const std::string& s, size_t begin, size_t end);
+
+		bool _isComment(size_t i);
+		bool _isString(size_t i);
+		bool _checkTag(ParseTag_t t);
+		void _touchTag(ParseTag_t t);
 
 	public:
-		Function(NodePtr top);
-		virtual std::string ToLua() override;
-		virtual void ConstructFrom(const std::string cjCode) override;
+		Parser(csref_t text);
+
+		void Parse();
 	};
-
-	class NodeFactory : public Singleton<NodeFactory>
-	{
-	public:
-		NodePtr Produce(Node::Type type, NodePtr top);
-	};
-
-
 }

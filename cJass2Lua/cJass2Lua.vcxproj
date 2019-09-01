@@ -115,11 +115,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="cJassNodes.h" />
     <ClInclude Include="cJassParser.h" />
+    <ClInclude Include="defs.h" />
+    <ClInclude Include="reutils.h" />
     <ClInclude Include="singleton.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="cJassNodes.cpp" />
     <ClCompile Include="cJassParser.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="reutils.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
