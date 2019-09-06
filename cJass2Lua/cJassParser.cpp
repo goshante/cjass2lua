@@ -151,7 +151,7 @@ namespace cJass
 		}
 		line = reu::IndexSubstr(line, i, line.length() - 1);
 
-		size_t i = line.length() - 1;
+		i = line.length() - 1;
 		while (true)
 		{
 			if (line[i] != ' ' && line[i] != '\t')
@@ -415,9 +415,13 @@ namespace cJass
 		}
 		else
 		{
+			if (line.line[0] == '(')
+			{
+
+			}
 			if (firstWord == "return")
 			{
-				
+				auto nextWord = reu::Search(line.line, "[^\\s\\t]", 6).Begin();
 			}
 			else if (firstWord == "if")
 			{
@@ -445,6 +449,9 @@ namespace cJass
 				bool isUnaryOperation = m.IsMatching();
 
 				m = reu::Search(line.line, "");
+				bool isDeclaration = m.IsMatching();
+
+				m = reu::Search(line.line, "");
 				bool isAssignment = m.IsMatching();
 
 				m = reu::Search(line.line, "");
@@ -469,7 +476,7 @@ namespace cJass
 				line.line = reu::IndexSubstr(line.line, parseResult.parseEnd + 1, line.end);
 			else
 				line = _nextLine(_index);
-			auto parseResult = _parseLine(line);
+			parseResult = _parseLine(line);
 			_touchTag(parseResult.tag);
 			_index = parseResult.parseEnd;
 		} while (line.end != _text.length() - 1);
