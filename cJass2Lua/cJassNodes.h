@@ -21,10 +21,8 @@ namespace cJass
 			GlobalSpace,
 			Function,
 			Comment,
-			Operation,
-			Statement,
-			Loop,
-			Lambda
+			OperationUnit,
+			LocalDeclaration
 		};
 
 	protected:
@@ -52,7 +50,7 @@ namespace cJass
 
 		NodePtr IterateSubnodes();
 		void ResetIterator();
-		Node* Ptr();
+		template <class PtrType = Node> PtrType* Ptr() { return dynamic_cast<PtrType*>(this); }
 		virtual std::string ToLua() = 0;
 		virtual void InitData(const std::vector<std::string>& strings) = 0;
 	};
@@ -92,28 +90,46 @@ namespace cJass
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
 
-	class Operation : public Node
+	class OperationUnit : public Node
 	{
 	public:
 		enum class OpType
 		{
 			Unknown,
-			PlusEquals,
-			MinusEquals,
-			MultEquals,
-			DivEquals,
-			Increment,
-			Decrement,
-			Assignment,
+			Expression,
+			Call,
+			If,
 			Return,
-			Call
+			Elseif,
+			Else,
+			While,
+			Lambda,
+			AtomicOperand,
+			Operator,
+			UnaryOperator
 		};
 
 	private:
-		std::string					_opText;
+		std::string		_opText;
+		OpType			_type;
+		bool			_inBrackets;
 
 	public:
-		Operation(Node* top);
+		OperationUnit(Node* top);
+		virtual std::string ToLua() override;
+		virtual void InitData(const std::vector<std::string>& strings) override;
+		OpType GetOpType() const;
+	};
+
+	class LocalDeclaration : public Node
+	{
+	private:
+		variable_t	_var;
+		bool		_isArr;
+		size_t		_arrSize;
+
+	public:
+		LocalDeclaration(Node* top);
 		virtual std::string ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
