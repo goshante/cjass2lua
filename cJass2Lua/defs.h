@@ -5,6 +5,9 @@
 #include <list>
 #include <stack>
 
+#define min(a,b) ((a < b) ? a : b)
+#define max(a,b) ((a > b) ? a : b)
+
 namespace cJass
 {
 	using csref_t = const std::string&;
@@ -31,10 +34,9 @@ namespace cJass
 		defs,
 		func,
 		lambda,
-		operand,
-		Operator,
-		caller,
-		declaration
+		operation,
+		statement,
+		loop
 	};
 
 	struct ParseResult_t

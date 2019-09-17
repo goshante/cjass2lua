@@ -34,7 +34,8 @@ namespace cJass
 		line_t _nextLine(size_t off);
 		std::string _nextPart();
 		ParseResult_t _parseLine(line_t& line);
-		std::string _normalizeLine(const std::string& s, size_t begin, size_t end);
+		line_t _normalizeLine(const std::string& s, size_t begin, size_t end);
+		Node* _addNode(cJass::Node::Type type, const std::vector<std::string> data);
 
 		bool _isComment(size_t i);
 		bool _isString(size_t i);
@@ -42,8 +43,9 @@ namespace cJass
 		void _touchTag(ParseTag_t t);
 
 	public:
-		Parser(csref_t text);
+		Parser(csref_t text, OutputInterface::Type outputType, void* outputPtr = nullptr);
 
 		void Parse();
+		void ToLua();
 	};
 }
