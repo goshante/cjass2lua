@@ -1,15 +1,78 @@
 #include "cJassNodes.h"
 #include "reutils.h"
+#include <iostream>
 
 #define PRODUCING_NODE_ROOT(__node__) case Node::Type::##__node__: \
-							return std::shared_ptr<##__node__>(new __node__)
+							return std::shared_ptr<##__node__>(new __node__(outputType, outputPtr))
 
 #define PRODUCING_NODE(__node__) case Node::Type::##__node__: \
 							return std::shared_ptr<__node__>(new __node__(top))
 
 namespace cJass
 {
-	NodePtr Node::Produce(Node::Type type, Node* top)
+	OutputInterface::OutputInterface() 
+		: _type(Type::None)
+		, _hFile(NULL)
+		, _strPtr(nullptr)
+	{
+	}
+
+	OutputInterface::OutputInterface(Type type, void* ptr)
+		: _type(type)
+		, _hFile(NULL)
+		, _strPtr(nullptr)
+	{
+		switch (type)
+		{
+		case Type::String:
+			_strPtr = static_cast<std::string*>(ptr);
+			break;
+		case Type::File:
+			_hFile = static_cast<HANDLE>(ptr);
+			break;
+		}
+	}
+
+	OutputInterface::OutputInterface(const OutputInterface& copy)
+		: _type(copy._type)
+		, _hFile(copy._hFile)
+		, _strPtr(copy._strPtr)
+	{
+	}
+
+	OutputInterface& OutputInterface::operator=(const OutputInterface& copy)
+	{
+		_type = copy._type;
+		_hFile = copy._hFile;
+		_strPtr = copy._strPtr;
+		return *this;
+	}
+
+	OutputInterface& OutputInterface::operator<<(const std::string& str)
+	{
+		DWORD dw = 0;
+		switch (_type)
+		{
+			case Type::None:
+				return *this;
+
+			case Type::Console:
+				std::cout << str;
+				break;
+
+			case Type::String:
+				(*_strPtr) += str;
+				break;
+
+			case Type::File:
+				WriteFile(_hFile, &str[0], static_cast<DWORD>(str.length()), &dw, NULL);
+				break;
+		}
+
+		return *this;
+	}
+
+	NodePtr Node::Produce(Node::Type type, Node* top, OutputInterface::Type outputType, void* outputPtr)
 	{
 		switch (type)
 		{
@@ -35,6 +98,7 @@ namespace cJass
 	{
 		_subnodes.push_back(node);
 		ResetIterator();
+		LastSubnode()->_out = _out;
 	}
 
 	Node::Type Node::GetType() const
@@ -69,15 +133,16 @@ namespace cJass
 		return _subnodes.back()->Ptr();
 	}
 
-	GlobalSpace::GlobalSpace()
+	GlobalSpace::GlobalSpace(OutputInterface::Type outputType, void* outputPtr)
 		: Node(Node::Type::GlobalSpace, nullptr)
 		, _globals({})
 	{
+		_out = OutputInterface(outputType, outputPtr);
 	}
 
-	std::string GlobalSpace::ToLua()
+	void GlobalSpace::ToLua() 
 	{
-		return ""; //TODO
+		for ( auto&n : _subnodes)
 	}
 
 	void GlobalSpace::InitData(const std::vector<std::string>& strings)
@@ -113,9 +178,9 @@ namespace cJass
 
 	}
 
-	std::string Comment::ToLua()
+	void Comment::ToLua()
 	{
-		return ""; //TODO
+		//TODO
 	}
 
 	void Comment::InitData(const std::vector<std::string>& strings)
@@ -144,9 +209,9 @@ namespace cJass
 	{
 	}
 
-	std::string Function::ToLua()
+	void Function::ToLua()
 	{
-		return ""; //TODO
+		//TODO
 	}
 
 	void Function::InitData(const std::vector<std::string>& strings)
@@ -170,24 +235,24 @@ namespace cJass
 	{
 	}
 
-	std::string OperationUnit::ToLua()
+	void OperationUnit::ToLua()
 	{
-		return ""; //TODO
+		//TODO
 	}
 
 	void OperationUnit::InitData(const std::vector<std::string>& strings)
 	{
 		size_t size = strings.size();
 		
-		if (size == 0)
+		if (size == 0 || size > 2)
 			throw std::runtime_error("Operationl::InitData - wrong set of input data.");
 
 		auto& s = strings[0];
 
-		if (s.length() < 1 || s.length() < 1)
+		if (s.length() < 1 || s.length() > 2)
 			throw std::runtime_error("Operationl::InitData - wrong key length.");
 
-		_inBrackets = (s[1] == 'b' ? true : false);
+		_inBrackets = (s.length() == 2 && s[1] == 'b' ? true : false);
 
 		switch (s[0])
 		{
@@ -258,9 +323,9 @@ namespace cJass
 	{
 	}
 
-	std::string LocalDeclaration::ToLua()
+	void LocalDeclaration::ToLua()
 	{
-		return ""; //TODO
+		//TODO
 	}
 
 	void LocalDeclaration::InitData(const std::vector<std::string>& strings)

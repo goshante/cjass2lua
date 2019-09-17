@@ -2,6 +2,7 @@
 
 #include "defs.h"
 #include <memory>
+#include <Windows.h>
 
 namespace cJass
 {
@@ -10,6 +11,32 @@ namespace cJass
 		std::string type;
 		std::string name;
 		std::string initValue;
+	};
+
+	class OutputInterface
+	{
+	public:
+		enum class Type
+		{
+			None,
+			File,
+			Console,
+			String
+		};
+
+	private:
+		Type			_type;
+		HANDLE			_hFile;
+		std::string*	_strPtr;
+
+	public:
+
+		OutputInterface();
+		OutputInterface(Type type, void* ptr);
+		OutputInterface(const OutputInterface& copy);
+		
+		OutputInterface& operator=(const OutputInterface& copy);
+		OutputInterface& operator<<(const std::string& str);
 	};
 
 	class Node
@@ -26,19 +53,22 @@ namespace cJass
 		};
 
 	protected:
-		bool _isNewLine;
-		size_t _tabs;
+		bool				_isNewLine;
+		size_t				_tabs;
+		OutputInterface		_out;
+		NodeList			_subnodes;
 
 	private:
-		Type		_type;
-		NodeList	_subnodes;
-		Node*		_top;
-		NL_iter		_it;
+		Type				_type;
+		NodeList			_subnodes;
+		Node*				_top;
+		NL_iter				_it;
+
 
 		Node(Node&) = delete;
 
 	public:
-		static NodePtr Produce(Node::Type type, Node* top);
+		static NodePtr Produce(Node::Type type, Node* top, OutputInterface::Type outputType = OutputInterface::Type::None, void* outputPtr = nullptr);
 
 		Node(Type type = Type::Undefined, Node* top = nullptr);
 		virtual ~Node() {}
@@ -51,7 +81,7 @@ namespace cJass
 		NodePtr IterateSubnodes();
 		void ResetIterator();
 		template <class PtrType = Node> PtrType* Ptr() { return dynamic_cast<PtrType*>(this); }
-		virtual std::string ToLua() = 0;
+		virtual void ToLua() = 0;
 		virtual void InitData(const std::vector<std::string>& strings) = 0;
 	};
 
@@ -61,8 +91,8 @@ namespace cJass
 		std::vector<variable_t> _globals;
 
 	public:
-		GlobalSpace();
-		virtual std::string ToLua() override;
+		GlobalSpace(OutputInterface::Type outputType, void* outputPtr);
+		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
 
@@ -73,7 +103,7 @@ namespace cJass
 
 	public:
 		Comment(Node* top);
-		virtual std::string ToLua() override;
+		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
 
@@ -86,7 +116,7 @@ namespace cJass
 
 	public:
 		Function(Node* top);
-		virtual std::string ToLua() override;
+		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
 
@@ -116,7 +146,7 @@ namespace cJass
 
 	public:
 		OperationUnit(Node* top);
-		virtual std::string ToLua() override;
+		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 		OpType GetOpType() const;
 	};
@@ -130,7 +160,7 @@ namespace cJass
 
 	public:
 		LocalDeclaration(Node* top);
-		virtual std::string ToLua() override;
+		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
 }

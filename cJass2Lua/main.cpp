@@ -18,7 +18,7 @@ std::string FileToString(std::string path)
 int main()
 {
 	std::string text = FileToString("D:\\test\\test2.j");
-	cJass::Parser parser(text);
+	cJass::Parser parser(text, cJass::OutputInterface::Type::Console);
 
 	parser.Parse();
 

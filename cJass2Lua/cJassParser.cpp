@@ -3,11 +3,12 @@
 
 namespace cJass
 {
-	Parser::Parser(csref_t text)
+	Parser::Parser(csref_t text, OutputInterface::Type outputType, void* outputPtr)
 		: _text(text)
 		, _typenameAssigning(false)
 		, _depth(0)
 		, _index(0)
+		, _rootNode(outputType, outputPtr)
 		, _activeNode(nullptr)
 		, _lastBlock(ParseTag_t::globals)
 	{
@@ -122,45 +123,51 @@ namespace cJass
 		return false;
 	}
 
-	std::string Parser::_normalizeLine(const std::string& s, size_t begin, size_t end)
+	line_t Parser::_normalizeLine(const std::string& s, size_t begin, size_t end)
 	{
-		std::string line;
+		line_t line =  {"", 0, 0};
 		size_t j = begin;
 		for (size_t i = 0; i <= s.length() - 1; i++)
 		{
 			if (_isComment(j))
 			{
 				if (!_isCommentParsed(j))
-				{
-					auto commentNode = Node::Produce(Node::Type::Comment, _activeNode);
-					commentNode->InitData({ _getCommentByRandomIndex(j) });
-					_activeNode->AddSubnode(commentNode);
-				}
+					_addNode(Node::Type::Comment, { _getCommentByRandomIndex(j) });
 			}
 			else
-				line.push_back(s[i]);
+				line.line.push_back(s[i]);
 			j++;
 		}
 
 		size_t i = 0;
-		while (i < line.length())
+		while (i < line.line.length())
 		{
-			if (line[i] != ' ' && line[i] != '\t')
+			if (line.line[i] != ' ' && line.line[i] != '\t' && line.line[i] != '{' && line.line[i] != ';')
 				break;
 			i++;
+			line.begin++;
 		}
-		line = reu::IndexSubstr(line, i, line.length() - 1);
+		line.line = reu::IndexSubstr(line.line, i, line.line.length() - 1);
 
-		i = line.length() - 1;
+		i = 0;
+		while (i < line.line.length())
+		{
+			if (line.line[i] == '{' && line.line[i] != ';')
+				line.line[i] = ' ';
+			i++;
+		}
+
+		i = line.line.length() - 1;
 		while (true)
 		{
-			if (line[i] != ' ' && line[i] != '\t')
+			if (line.line[i] != ' ' && line.line[i] != '\t')
 				break;
 			if (i == 0)
 				break;
 			i--;
+			line.end++;
 		}
-		line = reu::IndexSubstr(line, 0, i);
+		line.line = reu::IndexSubstr(line.line, 0, i);
 
 		return line;
 	}
@@ -173,11 +180,16 @@ namespace cJass
 		size_t end = NextLineEnd(_text, begin);
 		if (end != _text.length() - 1)
 			end--;
-		std::string line = reu::IndexSubstr(_text, begin, end);
-		if (IsLineEmpty(line) && end != _text.length() - 1)
+		std::string str = reu::IndexSubstr(_text, begin, end);
+		if (IsLineEmpty(str) && end != _text.length() - 1)
 			return _nextLine(end);
 		else
-			return { _normalizeLine(line, begin, end), begin, end };
+		{
+			auto line = _normalizeLine(str, begin, end);
+			line.begin += begin;
+			line.end = end - line.end;
+			return line;
+		}
 	}
 
 	void Parser::_findRanges()
@@ -249,6 +261,14 @@ namespace cJass
 				i++;
 			}
 		}
+	}
+
+	Node* Parser::_addNode(cJass::Node::Type type, const std::vector<std::string> data)
+	{
+		auto node = Node::Produce(type, _activeNode);
+		node->InitData(data);
+		_activeNode->AddSubnode(node);
+		return _activeNode->LastSubnode();
 	}
 
 	bool Parser::_isComment(size_t i)
@@ -325,18 +345,26 @@ namespace cJass
 	{// \\blambda\\b[\\s\\t]+([a-zA-Z0-9_]+)   - Lambda expression
 		std::string firstWord = reu::Search(line.line, "^\\w+").GetMatchingString();
 		size_t closingBracket = reu::Search(line.line, "\\}").Begin();
+		size_t closingArgs = reu::Search(line.line, "\\)").Begin();
 		static std::vector<std::string> vec_arg;
+
 		if (closingBracket != std::string::npos)
 		{
-			if (_isString(line.begin + closingBracket))
+			if (_isString(line.begin + closingBracket) || _isComment(line.begin + closingBracket))
 				closingBracket = std::string::npos;
 		}
 
-		size_t parseEnd = line.end;
-		if (closingBracket != std::string::npos && closingBracket > 0)
-			parseEnd = line.begin + closingBracket - 1;
+		if (closingArgs != std::string::npos)
+		{
+			if (_isString(line.begin + closingArgs) || _isComment(line.begin + closingArgs))
+				closingArgs = std::string::npos;
+		}
 
-		if (line.line[0] == '}')
+		size_t parseEnd = line.end;
+		if ((closingBracket != std::string::npos && closingBracket > 0) || (closingArgs != std::string::npos && closingArgs > 0))
+			parseEnd = line.begin + min(closingBracket, closingArgs) - 1;
+
+		if (line.line[0] == '}' || line.line[0] == ')')
 			return { ParseTag_t::end, parseEnd };
 
 		if (firstWord == "library" || firstWord == "endlibrary")
@@ -406,22 +434,25 @@ namespace cJass
 					for (auto& a : argList)
 						vec_arg.push_back(a);
 				}
-				auto functionNode = Node::Produce(Node::Type::Function, _activeNode);
-				functionNode->InitData(vec_arg);
-				_activeNode->AddSubnode(functionNode);
+				_addNode(Node::Type::Function, vec_arg);
 				_lastBlock = ParseTag_t::func;
 				return { ParseTag_t::func, parseEnd };
 			}			
 		}
 		else
 		{
+			vec_arg.clear();
 			if (line.line[0] == '(')
 			{
 
 			}
 			if (firstWord == "return")
 			{
-				auto nextWord = reu::Search(line.line, "[^\\s\\t]", 6).Begin();
+				auto nextExpr = reu::Search(line.line, "[^\\s\\t]", 6).Begin();
+				parseEnd = nextExpr;
+				vec_arg.push_back("r");
+				_addNode(Node::Type::OperationUnit, { "r" });
+				return { ParseTag_t::operation, parseEnd };
 			}
 			else if (firstWord == "if")
 			{
@@ -468,7 +499,7 @@ namespace cJass
 		line_t line = { "", 0, 0 };
 		ParseResult_t parseResult = { ParseTag_t::ignore, 0 };
 		_findRanges();
-		_removeJunk();
+		//_removeJunk();
 		_activeNode = _rootNode.Ptr();
 		do
 		{
@@ -481,5 +512,10 @@ namespace cJass
 			_index = parseResult.parseEnd;
 		} while (line.end != _text.length() - 1);
 		
+	}
+
+	void Parser::ToLua()
+	{
+		_rootNode.ToLua();
 	}
 } //namespace cJass
