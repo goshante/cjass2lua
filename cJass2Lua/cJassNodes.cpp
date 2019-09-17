@@ -142,7 +142,8 @@ namespace cJass
 
 	void GlobalSpace::ToLua() 
 	{
-		for ( auto&n : _subnodes)
+		for (auto& node : _subnodes)
+			node->ToLua();
 	}
 
 	void GlobalSpace::InitData(const std::vector<std::string>& strings)
@@ -190,15 +191,6 @@ namespace cJass
 			throw std::runtime_error("Comment::InitData - wrong set of input data.");
 
 		_comment = strings[0];
-		if (_comment.length() >= 2)
-			_comment = reu::IndexSubstr(_comment, 2, _comment.length() - 1);
-		if (_comment.length() >= 2 && _comment[_comment.length() - 1] == '/' && _comment[_comment.length() - 2] == '*')
-		{
-			if (_comment.length() == 2)
-				_comment = "";
-			else
-				_comment = reu::IndexSubstr(_comment, 0, _comment.length() - 3);
-		}
 	}
 
 	Function::Function(Node* top)
