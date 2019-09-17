@@ -28,6 +28,21 @@ namespace cJass
 
 	enum class ParseTag_t
 	{
+		none,
+		end,
+		ignore,
+		globals,
+		defs,
+		func,
+		lambda,
+		operation,
+		statement,
+		loop
+	};
+
+	enum class ParseTag2_t
+	{
+		none,
 		end,
 		ignore,
 		globals,

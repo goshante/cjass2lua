@@ -60,7 +60,6 @@ namespace cJass
 
 	private:
 		Type				_type;
-		NodeList			_subnodes;
 		Node*				_top;
 		NL_iter				_it;
 

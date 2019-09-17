@@ -1,6 +1,6 @@
 #include <iostream>
 #include <Windows.h>
-#include "cJassParser.h"
+#include "cJassParser2.h"
 
 std::string FileToString(std::string path)
 {
@@ -18,9 +18,16 @@ std::string FileToString(std::string path)
 int main()
 {
 	std::string text = FileToString("D:\\test\\test2.j");
-	cJass::Parser parser(text, cJass::OutputInterface::Type::Console);
+	cJass::Parser2 parser(text, cJass::OutputInterface::Type::Console);
 
-	parser.Parse();
+	try
+	{
+		parser.Parse();
+	}
+	catch (const std::exception& ex)
+	{
+		std::cout << "Exception: " << ex.what() << std::endl;
+	}
 
 	system("pause");
 	return 0;

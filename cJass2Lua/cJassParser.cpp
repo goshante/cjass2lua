@@ -12,6 +12,7 @@ namespace cJass
 		, _activeNode(nullptr)
 		, _lastBlock(ParseTag_t::globals)
 	{
+		_tags.emplace(ParseTag_t::none);
 	}
 
 	bool isIgnoreCharacter(char c)
@@ -175,6 +176,8 @@ namespace cJass
 	line_t Parser::_nextLine(size_t off)
 	{
 		size_t begin = NextLineStart(_text, off);
+		if (begin >= _text.length() - 1)
+			return { "", std::string::npos, std::string::npos };
 		if (off == 0)
 			begin = 0;
 		size_t end = NextLineEnd(_text, begin);
@@ -446,6 +449,18 @@ namespace cJass
 			{
 
 			}
+			else if (line.line[0] == ';')
+			{
+				return { ParseTag_t::end, parseEnd };
+			}
+			else if (line.line[0] == '"')
+			{
+				auto m = reu::Search(line.line, "^\\\"(.*[^\\\\])\\\"", 6);
+				std::string s = "\"" + m[1] + "\"";
+				parseEnd += 2 + s.length();
+				_addNode(Node::Type::OperationUnit, { "a", s });
+				return { ParseTag_t::ignore, parseEnd };
+			}
 			if (firstWord == "return")
 			{
 				auto nextExpr = reu::Search(line.line, "[^\\s\\t]", 6).Begin();
@@ -503,10 +518,12 @@ namespace cJass
 		_activeNode = _rootNode.Ptr();
 		do
 		{
-			if (parseResult.parseEnd != line.end)
+			if (parseResult.parseEnd > line.end)
 				line.line = reu::IndexSubstr(line.line, parseResult.parseEnd + 1, line.end);
 			else
 				line = _nextLine(_index);
+			if (line.begin == std::string::npos)
+				break;
 			parseResult = _parseLine(line);
 			_touchTag(parseResult.tag);
 			_index = parseResult.parseEnd;
