@@ -81,6 +81,12 @@ namespace cJass
 		_subjectStack.push(ParseTag2_t::none);
 	}
 
+	void Parser2::_pop()
+	{
+		_subjectStack.pop();
+		_activeNode = _activeNode->Top();
+	}
+
 	Node* Parser2::_addNode(cJass::Node::Type type, const std::vector<std::string> data, bool makeActive)
 	{
 		auto node = Node::Produce(type, _activeNode);
@@ -137,6 +143,10 @@ namespace cJass
 					_word = "]";
 					break;
 
+				case ctype_t::opEnd:
+					_word = ";";
+					break;
+
 				default:
 					return;
 				}
@@ -184,7 +194,7 @@ namespace cJass
 				{
 					if (_word == "endglobals")
 					{
-						_subjectStack.pop();
+						_pop();
 						goto parseWordEnd;
 					}
 
@@ -215,7 +225,7 @@ namespace cJass
 				{
 					if (_word == "enddefine")
 					{
-						_subjectStack.pop();
+						_pop();
 						goto parseWordEnd;
 					}
 
@@ -238,7 +248,7 @@ namespace cJass
 					if (_word == ")")
 					{
 						_addNode(Node::Type::Function, vec_arg, true);
-						_subjectStack.pop();
+						_pop();
 						vec_arg.clear();
 						depth++;
 						goto parseWordEnd;
@@ -261,7 +271,26 @@ namespace cJass
 			}
 			else
 			{
-				//ToDo
+				if (_subjectStack.top() == ParseTag2_t::ret)
+				{
+					if (_word == ";")
+					{
+						_pop();
+						depth--;
+						goto parseWordEnd;
+					}
+				}
+
+				
+				if (_word == "return")
+				{
+					_subjectStack.push(ParseTag2_t::ret);
+					_addNode(Node::Type::OperationUnit, { "r" }, true);
+					depth++;
+				}
+
+
+				
 			}
 
 			parseWordEnd:
@@ -364,17 +393,6 @@ namespace cJass
 				isString = true;
 				break;
 
-			case ctype_t::opEnd:
-				parseWord();
-				break;
-
-			case ctype_t::nl:
-			case ctype_t::nlr:
-			case ctype_t::unk:
-			case ctype_t::emp:
-				parseWord();
-				break;
-
 			case ctype_t::lit:
 				if (!reu::IsMatching(_word, "^[^0-9][a-zA-Z0-9_]*$"))
 					parseWord();
@@ -400,11 +418,19 @@ namespace cJass
 				isRawCode = true;
 				break;
 
+			case ctype_t::nl:
+			case ctype_t::nlr:
+			case ctype_t::unk:
+			case ctype_t::emp:
 			case ctype_t::bBeg:
+			case ctype_t::iBeg:
+				parseWord();
+				break;
+
+			case ctype_t::opEnd:
 			case ctype_t::bEnd:
 			case ctype_t::aBeg:
 			case ctype_t::aEnd:
-			case ctype_t::iBeg:
 			case ctype_t::iEnd:
 				parseWord();
 				parseWord(ct);

@@ -21,6 +21,7 @@ namespace cJass
 		bool					_unitIsComplete;
 
 		Node* _addNode(cJass::Node::Type type, const std::vector<std::string> data, bool makeActive = false);
+		void _pop();
 
 	public:
 		Parser2(csref_t text, OutputInterface::Type outputType, void* outputPtr = nullptr);
