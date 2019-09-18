@@ -51,7 +51,8 @@ namespace cJass
 		lambda,
 		operation,
 		statement,
-		loop
+		loop,
+		ret
 	};
 
 	struct ParseResult_t
