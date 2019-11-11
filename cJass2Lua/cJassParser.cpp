@@ -3,12 +3,12 @@
 
 namespace cJass
 {
-	Parser::Parser(csref_t text, OutputInterface::Type outputType, void* outputPtr)
+	Parser::Parser(csref_t text, OutputInterface::Type outputType, OutputInterface::NewLineType nlType, void* outputPtr)
 		: _text(text)
 		, _typenameAssigning(false)
 		, _depth(0)
 		, _index(0)
-		, _rootNode(outputType, outputPtr)
+		, _rootNode(outputType, nlType, outputPtr)
 		, _activeNode(nullptr)
 		, _lastBlock(ParseTag_t::globals)
 	{

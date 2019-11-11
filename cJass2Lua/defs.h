@@ -43,15 +43,10 @@ namespace cJass
 	enum class ParseTag2_t
 	{
 		none,
-		end,
-		ignore,
 		globals,
 		defs,
 		func,
 		lambda,
-		operation,
-		statement,
-		loop,
 		ret
 	};
 
