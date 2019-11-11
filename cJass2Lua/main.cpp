@@ -18,17 +18,21 @@ std::string FileToString(std::string path)
 int main()
 {
 	std::string text = FileToString("D:\\test\\test2.j");
-	cJass::Parser2 parser(text, cJass::OutputInterface::Type::Console);
+	std::string outputFilePath   =  "D:\\test\\output.lua";
+	HANDLE hFile = CreateFileA(outputFilePath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
+		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	cJass::Parser2 parser(text, cJass::OutputInterface::Type::File, cJass::OutputInterface::NewLineType::LF, hFile);
 
 	try
 	{
 		parser.Parse();
+		parser.ToLua();
 	}
 	catch (const std::exception& ex)
 	{
 		std::cout << "Exception: " << ex.what() << std::endl;
 	}
-
+	CloseHandle(hFile);
 	system("pause");
 	return 0;
 }
