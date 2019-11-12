@@ -10,28 +10,33 @@ std::string FileToString(std::string path)
 	std::string buf;
 	DWORD dw = 0;
 	buf.resize(size);
-	ReadFile(hFile, &buf[0], size, &dw, NULL);
+	ReadFile(hFile, &buf[0], DWORD(size), &dw, NULL);
 	CloseHandle(hFile);
 	return buf;
 }
 
 int main()
 {
-	std::string text = FileToString("D:\\test\\test2.j");
+	appLog(Debug) << "Starting cJass2Lua application";
+
+	std::string	inputFile		 =	"D:\\test\\test2.j";
+	std::string text			 =  FileToString(inputFile);
 	std::string outputFilePath   =  "D:\\test\\output.lua";
 	HANDLE hFile = CreateFileA(outputFilePath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
 		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	cJass::Parser2 parser(text, cJass::OutputInterface::Type::File, cJass::OutputInterface::NewLineType::LF, hFile);
+
+	cJass::Parser2 parser(OutputInterface::Type::File, OutputInterface::NewLineType::LF, hFile);
 
 	try
 	{
-		parser.Parse();
+		parser.Parse(text, inputFile);
 		parser.ToLua();
 	}
 	catch (const std::exception& ex)
 	{
-		std::cout << "Exception: " << ex.what() << std::endl;
+		appLog(Fatal) << ex.what();
 	}
+
 	CloseHandle(hFile);
 	system("pause");
 	return 0;

@@ -5,6 +5,10 @@
 #include <list>
 #include <stack>
 
+#include "Logger.h"
+
+#pragma warning(disable : 4005)
+
 #define min(a,b) ((a < b) ? a : b)
 #define max(a,b) ((a > b) ? a : b)
 
@@ -47,7 +51,8 @@ namespace cJass
 		defs,
 		func,
 		lambda,
-		ret
+		ret,
+		call
 	};
 
 	struct ParseResult_t

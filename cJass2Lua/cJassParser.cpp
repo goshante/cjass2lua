@@ -458,7 +458,7 @@ namespace cJass
 				auto m = reu::Search(line.line, "^\\\"(.*[^\\\\])\\\"", 6);
 				std::string s = "\"" + m[1] + "\"";
 				parseEnd += 2 + s.length();
-				_addNode(Node::Type::OperationUnit, { "a", s });
+				_addNode(Node::Type::OperationObject, { "a", s });
 				return { ParseTag_t::ignore, parseEnd };
 			}
 			if (firstWord == "return")
@@ -466,7 +466,7 @@ namespace cJass
 				auto nextExpr = reu::Search(line.line, "[^\\s\\t]", 6).Begin();
 				parseEnd = nextExpr;
 				vec_arg.push_back("r");
-				_addNode(Node::Type::OperationUnit, { "r" });
+				_addNode(Node::Type::OperationObject, { "r" });
 				return { ParseTag_t::operation, parseEnd };
 			}
 			else if (firstWord == "if")

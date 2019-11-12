@@ -1,9 +1,17 @@
 #include "cJassParser2.h"
 #include "reutils.h"
+#include <sstream>
+
+void stack_incr_top(std::stack<int>& st)
+{
+	int i = st.top();
+	i++;
+	st.pop();
+	st.push(i);
+}
 
 namespace cJass
 {
-	OutputInterface::NewLine OutputInterface::nl;
 	enum class ctype_t
 	{
 		undefined,
@@ -257,6 +265,8 @@ namespace cJass
 
 		if (word != "local"
 			&& word != "call"
+			&& word != "set"
+			&& word != "function"
 			&& reu::IsMatching(word, "^[a-zA-Z_]{1,1}[0-9a-zA-Z_]*$"))
 			return word_t::id;
 
@@ -292,31 +302,32 @@ namespace cJass
 			return ctype_t::iEnd;
 		else if (c == ';')
 			return ctype_t::opEnd;
-		else if (reu::IsMatching(str, "[\\s\\t]"))
-			return ctype_t::emp;
-		else if (reu::IsMatching(str, "[\\n]"))
+		else if (c == '\n')
 			return ctype_t::nl;
-		else if (reu::IsMatching(str, "[\\r]"))
+		else if (c == '\r')
 			return ctype_t::nlr;
-		else if (reu::IsMatching(str, "[a-zA-Z_]"))
+		else if (reu::IsMatching(str, "^[\\s\\t]$"))
+			return ctype_t::emp;
+		else if (reu::IsMatching(str, "^[a-zA-Z_]$"))
 			return ctype_t::lit;
-		else if (reu::IsMatching(str, "[0-9]"))
+		else if (reu::IsMatching(str, "^[0-9]$"))
 			return ctype_t::dig;
-		else if (reu::IsMatching(str, "[\\\\\\/\\+\\-\\=\\*\\!\\<\\>\\^\\&\\|\\~\\%]"))
+		else if (reu::IsMatching(str, "^[\\\\\\/\\+\\-\\=\\*\\!\\<\\>\\^\\&\\|\\~\\%]$"))
 			return ctype_t::oper;
 
 		return ctype_t::unk;
 	}
 
-	Parser2::Parser2(csref_t text, OutputInterface::Type outputType, OutputInterface::NewLineType nlType, void* outputPtr)
-		: _text(text)
+	Parser2::Parser2(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, void* outputPtr)
+		: _text("")
 		, _word("")
-		, _operator("")
-		, _index(0)
 		, _rootNode(outputType, nlType, outputPtr)
 		, _activeNode(&_rootNode)
 		, _lastAddedNode(&_rootNode)
 		, _unitIsComplete(false)
+		, _line(0)
+		, _wordPos(0)
+		, _fileName("")
 	{
 	}
 
@@ -354,7 +365,7 @@ namespace cJass
 		return _activeNode->LastSubnode();
 	}
 
-	void Parser2::Parse()
+	void Parser2::Parse(csref_t text, csref_t cjassFileName)
 	{
 		char c;
 		char prev = '\0';
@@ -364,18 +375,22 @@ namespace cJass
 		bool isMultilineComment = false;
 		bool isRawCode = false;
 		bool isIndex = false;
-		size_t line = 0;
+		_text = text;
+		_fileName = cjassFileName;
+		_line = 1;
+		_wordPos = 1;
+		_word = "";
 		std::string prevWord;
 		size_t len = _text.length();
 		ctype_t ctPrev = ctype_t::undefined, ct;
 		std::vector<std::string> vec_arg;
-		
+
 		int parseSteps = 0;
 
 		std::stack<ParseTag2_t> subjectStack;
 		subjectStack.push(ParseTag2_t::none);
 		auto parseWord = [this, &prevWord, &parseSteps, &vec_arg, ctPrev, &isString, &isLineComment,
-			&isMultilineComment, &isRawCode, line, &subjectStack](ctype_t explicitParse = ctype_t::undefined) -> void
+			&isMultilineComment, &isRawCode, &subjectStack](ctype_t explicitParse = ctype_t::undefined) -> void
 		{
 			static bool globalVarDeclaration = false;
 			static bool localVarDeclaration = false;
@@ -383,10 +398,11 @@ namespace cJass
 			static word_t wtype = word_t::undefined;
 			static word_t wtype_prev = word_t::undefined;
 			static std::shared_ptr<cJass::Node> tmpNode;
-			static bool next = false;
 			static auto prevActive = _activeNode;
 			static std::stack<cJass::Node*> arrNodeStackLast;
 			static std::stack<cJass::Node*> arrNodeStackActive;
+			static std::stack<cJass::Node*> callNodeStackLast;
+			static std::stack<int>			argCount;
 
 			auto pops = [this, &subjectStack]() -> void
 			{
@@ -395,9 +411,6 @@ namespace cJass
 			};
 
 			wtype = classifyWord(_word);
-
-			if (next && wtype_prev != word_t::next)
-				next = false;
 
 			if (_word == "")
 			{
@@ -412,9 +425,9 @@ namespace cJass
 					wtype = word_t::expClose;
 					break;
 
-				/*case ctype_t::bBeg:
-					_word = "{";
-					break;*/
+					/*case ctype_t::bBeg:
+						_word = "{";
+						break;*/
 
 				case ctype_t::bEnd:
 					_word = "}";
@@ -446,7 +459,7 @@ namespace cJass
 				}
 			}
 
-			if (ignoreLine == line)
+			if (ignoreLine == _line)
 				return;
 
 			if (_word == "//")
@@ -488,7 +501,7 @@ namespace cJass
 			if (_depth() == 0)
 			{
 				if (_word == "library" || _word == "endlibrary")
-					ignoreLine = line;
+					ignoreLine = _line;
 
 				if (_word == ",")
 					goto parseWordEnd;
@@ -497,6 +510,7 @@ namespace cJass
 				{
 					if (_word == "endglobals")
 					{
+						appLog(Debug) << "End parsing globals";
 						pops();
 						vec_arg.clear();
 						goto parseWordEnd;
@@ -532,6 +546,7 @@ namespace cJass
 				{
 					if (_word == "enddefine")
 					{
+						appLog(Debug) << "End parsing defines";
 						pops();
 						goto parseWordEnd;
 					}
@@ -551,9 +566,10 @@ namespace cJass
 				}
 				else if (subjectStack.top() == ParseTag2_t::func)
 				{
-					_func:
+				_func:
 					if (_word == ")")
 					{
+						appLog(Debug) << "Parsing function" << vec_arg[1];
 						_addNode(Node::Type::Function, vec_arg, true);
 						subjectStack.pop();
 						vec_arg.clear();
@@ -566,9 +582,15 @@ namespace cJass
 				else if (subjectStack.top() == ParseTag2_t::none)
 				{
 					if (_word == "globals")
+					{
+						appLog(Debug) << "Parsing globals";
 						subjectStack.push(ParseTag2_t::globals);
+					}
 					else if (_word == "define")
-							subjectStack.push(ParseTag2_t::defs);
+					{
+						appLog(Debug) << "Parsing defines";
+						subjectStack.push(ParseTag2_t::defs);
+					}
 					else if (_word != ";")
 					{
 						vec_arg.clear();
@@ -594,6 +616,17 @@ namespace cJass
 				static bool writingArrDecl = false;
 				static bool wrapperCreated = false;
 
+				if (subjectStack.top() == ParseTag2_t::call && argCount.top() == 0 && wtype != word_t::expClose)
+				{
+					callNodeStackLast.push(_lastAddedNode);
+					tmpNode = Node::Produce(Node::Type::OperationObject, _activeNode);
+					tmpNode->InitData({ "a" });
+					_activeNode->AddSubnode(tmpNode);
+					_activeNode = tmpNode->Ptr();
+					_lastAddedNode = tmpNode->Ptr();
+					stack_incr_top(argCount);
+				}
+
 				if (writingArrDecl)
 				{
 					if (wtype == word_t::indexClose)
@@ -609,182 +642,220 @@ namespace cJass
 
 				switch (wtype)
 				{
-					case word_t::retn:
-						subjectStack.push(ParseTag2_t::ret);
-						_addNode(Node::Type::OperationUnit, { "r" }, true);
-						break;
+				case word_t::retn:
+					subjectStack.push(ParseTag2_t::ret);
+					_addNode(Node::Type::OperationObject, { "r" }, true);
+					break;
 
-					case word_t::id:
-						if (localVarDeclaration && !varAdded)
+				case word_t::id:
+					if (localVarDeclaration && !varAdded)
+					{
+						varName = _word;
+					}
+					else
+					{
+						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret)
 						{
-							varName = _word;
+							_addNode(Node::Type::OperationObject, { "W" }, true);
+							wrapperCreated = true;
 						}
-						else
+
+						_addNode(Node::Type::OperationObject, { "I", _word });
+					}
+					break;
+
+				case word_t::type:
+					localVarDeclaration = true;
+					tmpNode = Node::Produce(Node::Type::LocalDeclaration, _activeNode);
+					tmpNode->InitData({ _word });
+					prevActive = _activeNode;
+					_activeNode = tmpNode->Ptr();
+					varAdded = false;
+					break;
+
+				case word_t::op:
+					if (localVarDeclaration && _word == "=")
+					{
+						_activeNode = tmpNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
+						_lastAddedNode = _activeNode;
+						varAdded = true;
+					}
+					else
+					{
+						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret)
 						{
-							if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret)
-							{
-								_addNode(Node::Type::OperationUnit, { "W" }, true);
-								wrapperCreated = true;
-							}
-							
-							_addNode(Node::Type::OperationUnit, { "I", _word });
+							_addNode(Node::Type::OperationObject, { "W" }, true);
+							wrapperCreated = true;
 						}
-						break;
 
-					case word_t::type:
-						localVarDeclaration = true;
-						tmpNode = Node::Produce(Node::Type::LocalDeclaration, _activeNode);
-						tmpNode->InitData({ _word });
-						prevActive = _activeNode;
-						_activeNode = tmpNode->Ptr();
-						varAdded = false;
-						break;
+						std::string oper = _word;
+						if (wtype_prev == word_t::op || _activeNode->CountSubnodes() == 0 && oper == "-")
+							oper = "dig_minus";
+						_addNode(Node::Type::OperationObject, { "o", oper });
+					}
+					break;
 
-					case word_t::op:
-						if (localVarDeclaration && _word == "=")
+				case word_t::unary:
+					if (_lastAddedNode->GetType() == Node::Type::OperationObject
+						&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
+						_lastAddedNode->InitData({ "u", prevWord, _word });
+					else
+						appLog(Warning) << "Unary operator not after identifier.(" << _line << ":" << _wordPos << ")";
+					break;
+
+				case word_t::unaryExpr:
+					if (_lastAddedNode->GetType() == Node::Type::OperationObject
+						&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
+						_lastAddedNode->InitData({ "ue", prevWord, _word });
+					else
+						appLog(Warning) << "Unary expression not after identifier.(" << _line << ":" << _wordPos << ")";
+					break;
+
+				case word_t::constant:
+					if (localVarDeclaration)
+						_addNode(Node::Type::OperationObject, { "C", _word }, true);
+					else
+					{
+						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret)
 						{
-							_activeNode = tmpNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
-							_lastAddedNode = _activeNode;
-							varAdded = true;
+							_addNode(Node::Type::OperationObject, { "W" }, true);
+							wrapperCreated = true;
 						}
-						else
+						_addNode(Node::Type::OperationObject, { "C", _word });
+					}
+					break;
+
+				case word_t::expOpen:
+					if (wtype_prev == word_t::id)
+					{
+						_lastAddedNode->InitData({ "c", prevWord });
+						_activeNode = _lastAddedNode;
+						subjectStack.push(ParseTag2_t::call);
+						argCount.push(0);
+					}
+					else
+						_addNode(Node::Type::OperationObject, { "xb" }, true);
+					break;
+
+				case word_t::expClose:
+					if (_activeNode->GetType() == Node::Type::OperationObject
+						&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Call
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Argument))
+					{
+						pops();
+						if (argCount.top() > 0)
 						{
-							if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret)
-							{
-								_addNode(Node::Type::OperationUnit, { "W" }, true);
-								wrapperCreated = true;
-							}
-							
-							std::string oper = _word;
-							if (wtype_prev == word_t::op || _activeNode->CountSubnodes() == 0 && oper == "-")
-								oper = "dig_minus";
-							_addNode(Node::Type::OperationUnit, { "o", oper });
-						}
-						break;
-
-					case word_t::unary:
-						if (_lastAddedNode->GetType() == Node::Type::OperationUnit
-							&& _lastAddedNode->Ptr<OperationUnit>()->GetOpType() == OperationUnit::OpType::Id)
-						{
-							_lastAddedNode->InitData({ "u", _word });
-							tmpNode = Node::Produce(Node::Type::LocalDeclaration, _activeNode);
-						}
-						
-						
-						break;
-
-					case word_t::unaryExpr:
-						break;
-
-					case word_t::constant:
-						if (localVarDeclaration)
-							_addNode(Node::Type::OperationUnit, { "C", _word }, true);
-						else
-						{
-							if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret)
-							{
-								_addNode(Node::Type::OperationUnit, { "W" }, true);
-								wrapperCreated = true;
-							}
-							_addNode(Node::Type::OperationUnit, { "C", _word });
-						}
-						
-						break;
-
-					case word_t::expOpen:
-						if (wtype_prev == word_t::id)
-							_lastAddedNode->InitData({ "c", prevWord }); //ToDo::call args
-						else
-							_addNode(Node::Type::OperationUnit, { "xb" }, true);
-						break;
-
-					case word_t::expClose:
-						_pop();
-						break;
-
-					case word_t::indexOpen:
-						if (localVarDeclaration)
-							writingArrDecl = true;
-						else
-							if (_lastAddedNode->GetType() == Node::Type::OperationUnit
-								&& _lastAddedNode->Ptr<OperationUnit>()->GetOpType() == OperationUnit::OpType::Id)
-							{
-								tmpNode = Node::Produce(Node::Type::OperationUnit, _lastAddedNode);
-								tmpNode->InitData({ "n" });
-								_lastAddedNode->AddSubnode(tmpNode);
-								arrNodeStackActive.push(_activeNode);
-								arrNodeStackLast.push(_lastAddedNode);
-								_activeNode = tmpNode->Ptr();
-							}
-						break;
-
-					case word_t::indexClose:
-						_activeNode = arrNodeStackActive.top();
-						_lastAddedNode = arrNodeStackLast.top();
-						arrNodeStackLast.pop();
-						arrNodeStackActive.pop();
-						break;
-
-					case word_t::If:
-						break;
-
-					case word_t::Else:
-						break;
-
-					case word_t::elseif:
-						break;
-
-					case word_t::lambda:
-						break;
-
-					case word_t::comment:
-						_addNode(Node::Type::Comment, { _word });
-						break;
-
-					case word_t::next:
-						next = true;
-						if (localVarDeclaration)
-						{
-							_activeNode = tmpNode->Ptr();
-							if (!varAdded)
-								tmpNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
-							else
-								varAdded = false;
-							varName = "";
-							varArrSize = "";
-						}
-						break;
-
-					case word_t::loop:
-						break;
-
-					case word_t::end:
-						if (localVarDeclaration)
-						{
-							localVarDeclaration = false;
-							_activeNode = prevActive;
-							if (!varAdded)
-								tmpNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
-							else
-								varAdded = false;
-							_addNode(tmpNode);
-							varName = "";
-							varArrSize = "";
-						}
-						else
-						{
-							if (wrapperCreated)
-								wrapperCreated = false;
 							_pop();
+							_lastAddedNode = callNodeStackLast.top();
+							callNodeStackLast.pop();
 						}
-						break;
+						argCount.pop();
+					}
+					else
+						_pop();
+					break;
 
-					case word_t::blocklEnd:
-						break;
+				case word_t::indexOpen:
+					if (localVarDeclaration)
+						writingArrDecl = true;
+					else
+						if (_lastAddedNode->GetType() == Node::Type::OperationObject
+							&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
+						{
+							tmpNode = Node::Produce(Node::Type::OperationObject, _lastAddedNode);
+							tmpNode->InitData({ "n" });
+							_lastAddedNode->AddSubnode(tmpNode);
+							arrNodeStackActive.push(_activeNode);
+							arrNodeStackLast.push(_lastAddedNode);
+							_activeNode = tmpNode->Ptr();
+						}
+					break;
 
-					case word_t::undefined:
-						//i dunno lol
-						break;
+				case word_t::indexClose:
+					_activeNode = arrNodeStackActive.top();
+					_lastAddedNode = arrNodeStackLast.top();
+					arrNodeStackLast.pop();
+					arrNodeStackActive.pop();
+					break;
+
+				case word_t::If:
+					break;
+
+				case word_t::Else:
+					break;
+
+				case word_t::elseif:
+					break;
+
+				case word_t::lambda:
+					break;
+
+				case word_t::comment:
+					_addNode(Node::Type::Comment, { _word });
+					break;
+
+				case word_t::next:
+					if (localVarDeclaration)
+					{
+						_activeNode = tmpNode->Ptr();
+						if (!varAdded)
+							tmpNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
+						else
+							varAdded = false;
+						varName = "";
+						varArrSize = "";
+					}
+					else
+					{
+						if (_activeNode->GetType() == Node::Type::OperationObject
+							&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Argument)
+						{
+							_pop();
+							tmpNode = Node::Produce(Node::Type::OperationObject, _activeNode);
+							tmpNode->InitData({ "a" });
+							_activeNode->AddSubnode(tmpNode);
+							_activeNode = tmpNode->Ptr();
+							_lastAddedNode = tmpNode->Ptr();
+							stack_incr_top(argCount);
+						}
+						else
+							appLog(Warning) << "Unexpected comma.(" << _line << ":" << _wordPos << ")This is not function call.";
+					}
+					break;
+
+				case word_t::loop:
+					break;
+
+				case word_t::end:
+					if (localVarDeclaration)
+					{
+						localVarDeclaration = false;
+						_activeNode = prevActive;
+						if (!varAdded)
+							tmpNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
+						else
+							varAdded = false;
+						_addNode(tmpNode);
+						varName = "";
+						varArrSize = "";
+					}
+					else
+					{
+						if (wrapperCreated)
+							wrapperCreated = false;
+						_pop();
+					}
+					break;
+
+				case word_t::blocklEnd:
+					_pop();
+					if (_activeNode->GetDepth() == 0)
+						appLog(Debug) << "End parsing function";
+					break;
+
+				case word_t::undefined:
+					appLog(Warning) << "Unknown identifier" << _word;
+					break;
 				}
 			}
 
@@ -794,146 +865,163 @@ namespace cJass
 			_word = "";
 		};
 
-		for (size_t i = 0; i < len; i++)
+		appLog(Debug) << "Starting parse of \"" << _fileName << "\"";
+		appLog(Debug) << "Parsing line" << long(1);
+		try
 		{
-			c = _text[i];
-			ct = classifyChar(c);
-			if ((i+1) < len)
-				next = _text[i + 1];
-			else
-				next = '\0';
-
-			if (i > 0)
-				prev = _text[i - 1];
-			else
-				prev = '\0';
-
-			if (ct == ctype_t::nl)
-				line++;
-
-			if (isString || isMultilineComment || isLineComment || isRawCode)
+			for (size_t i = 0; i < len; i++)
 			{
-				if (isString && c != '"')
+				c = _text[i];
+				ct = classifyChar(c);
+				if ((i + 1) < len)
+					next = _text[i + 1];
+				else
+					next = '\0';
+
+				if (i > 0)
+					prev = _text[i - 1];
+				else
+					prev = '\0';
+
+				if (ct == ctype_t::nl)
 				{
-					_word.push_back(c);
-					continue;
+					_wordPos = 1;
+					_line++;
+					appLog(Debug) << "Parsing line" << _line;
 				}
-				else if (isMultilineComment)
+				else
+					_wordPos++;
+
+				if (isString || isMultilineComment || isLineComment || isRawCode)
 				{
-					if (c != '*')
+					if (isString && c != '"')
 					{
 						_word.push_back(c);
 						continue;
 					}
-					else
+					else if (isMultilineComment)
 					{
-						if (next != '/')
+						if (c != '*')
 						{
 							_word.push_back(c);
 							continue;
 						}
+						else
+						{
+							if (next != '/')
+							{
+								_word.push_back(c);
+								continue;
+							}
+						}
+
 					}
-					
+					else if (isLineComment && c != '\r' && c != '\n')
+					{
+						_word.push_back(c);
+						continue;
+					}
+					else if (isRawCode && c != '\'')
+					{
+						_word.push_back(c);
+						continue;
+					}
 				}
-				else if (isLineComment && c != '\r' && c != '\n')
+
+				if (isString && c == '"')
 				{
-					_word.push_back(c);
+					parseWord();
+					isString = false;
+					ctPrev = ct;
 					continue;
 				}
-				else if (isRawCode && c != '\'')
+				else if (isMultilineComment && c == '*' && next == '/')
 				{
-					_word.push_back(c);
+					parseWord();
+					isMultilineComment = false;
+					i++;
+					ctPrev = ct;
 					continue;
 				}
-			}
-
-			if (isString && c == '"')
-			{
-				parseWord();
-				isString = false;
-				ctPrev = ct;
-				continue;
-			}
-			else if (isMultilineComment && c == '*' && next == '/')
-			{
-				parseWord();
-				isMultilineComment = false;
-				i++;
-				ctPrev = ct;
-				continue;
-			}
-			else if (isLineComment && (c == '\r' || next == '\n'))
-			{
-				parseWord();
-				isLineComment = false;
-				ctPrev = ct;
-				continue;
-			}
-			else if (isRawCode && c == '\'')
-			{
-				parseWord();
-				isRawCode = false;
-				ctPrev = ct;
-				continue;
-			}
-
-			switch (ct)
-			{
-			case ctype_t::oper:
-				if (ctPrev != ctype_t::oper)
+				else if (isLineComment && (c == '\r' || c == '\n'))
+				{
 					parseWord();
-				_word.push_back(c);
-				break;
-
-			case ctype_t::str:
-				parseWord();
-				isString = true;
-				break;
-
-			case ctype_t::lit:
-				if (!reu::IsMatching(_word, "^[a-zA-Z_][a-zA-Z0-9_]*$"))
+					isLineComment = false;
+					ctPrev = ct;
+					continue;
+				}
+				else if (isRawCode && c == '\'')
+				{
 					parseWord();
-				_word.push_back(c);
-				break;
+					isRawCode = false;
+					ctPrev = ct;
+					continue;
+				}
 
-			case ctype_t::dot:
-				if (!reu::IsMatching(_word, "^[0-9\\.]+$"))
+				switch (ct)
+				{
+				case ctype_t::oper:
+					if (ctPrev != ctype_t::oper)
+						parseWord();
+					_word.push_back(c);
+					break;
+
+				case ctype_t::str:
 					parseWord();
-				_word.push_back(c);
-				break;
+					isString = true;
+					break;
 
-			case ctype_t::dig:
-				if (!reu::IsMatching(_word, "^[a-zA-Z0-9_\\.]+$"))
+				case ctype_t::lit:
+					if (!reu::IsMatching(_word, "^[a-zA-Z_][a-zA-Z0-9_]*$"))
+						parseWord();
+					_word.push_back(c);
+					break;
+
+				case ctype_t::dot:
+					if (!reu::IsMatching(_word, "^[0-9\\.]+$"))
+						parseWord();
+					_word.push_back(c);
+					break;
+
+				case ctype_t::dig:
+					if (!reu::IsMatching(_word, "^[a-zA-Z0-9_\\.]+$"))
+						parseWord();
+					_word.push_back(c);
+					break;
+
+				case ctype_t::raw:
 					parseWord();
-				_word.push_back(c);
-				break;
-			
-			case ctype_t::raw:
-				parseWord();
-				isRawCode = true;
-				break;
+					isRawCode = true;
+					break;
 
-			case ctype_t::nl:
-			case ctype_t::nlr:
-			case ctype_t::unk:
-			case ctype_t::emp:
-				parseWord();
-				break;
+				case ctype_t::nl:
+				case ctype_t::nlr:
+				case ctype_t::unk:
+				case ctype_t::emp:
+					parseWord();
+					break;
 
-			case ctype_t::com:
-			case ctype_t::iBeg:
-			case ctype_t::bBeg:
-			case ctype_t::opEnd:
-			case ctype_t::bEnd:
-			case ctype_t::aBeg:
-			case ctype_t::aEnd:
-			case ctype_t::iEnd:
-				parseWord();
-				parseWord(ct);
-				break;
+				case ctype_t::com:
+				case ctype_t::iBeg:
+				case ctype_t::bBeg:
+				case ctype_t::opEnd:
+				case ctype_t::bEnd:
+				case ctype_t::aBeg:
+				case ctype_t::aEnd:
+				case ctype_t::iEnd:
+					parseWord();
+					parseWord(ct);
+					break;
+				}
+
+				ctPrev = ct;
 			}
-
-			ctPrev = ct;
+			appLog(Info) << "Parse successfuly done!" << _line;
+		}
+		catch (const std::exception& ex)
+		{
+			appLog(Warning) << "Possible problem on line "  << _line << ", position " << _wordPos << ".";
+			throw std::runtime_error(ex.what());
 		}
 	}
 
