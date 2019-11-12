@@ -1,6 +1,5 @@
 #include "cJassNodes.h"
 #include "reutils.h"
-#include <iostream>
 
 #define PRODUCING_NODE_ROOT(__node__) case Node::Type::##__node__: \
 							return std::shared_ptr<##__node__>(new __node__(outputType, nlType, outputPtr))
@@ -10,95 +9,6 @@
 
 namespace cJass
 {
-	OutputInterface::OutputInterface() 
-		: _type(Type::None)
-		, _hFile(NULL)
-		, _strPtr(nullptr)
-		, _nl("\r\n")
-	{
-	}
-
-	OutputInterface::OutputInterface(Type type, NewLineType nlType, void* ptr)
-		: _type(type)
-		, _hFile(NULL)
-		, _strPtr(nullptr)
-	{
-		switch (type)
-		{
-		case Type::String:
-			_strPtr = static_cast<std::string*>(ptr);
-			break;
-		case Type::File:
-			_hFile = static_cast<HANDLE>(ptr);
-			break;
-		}
-
-		switch (nlType)
-		{
-		case NewLineType::CR:
-			_nl = "\r";
-			break;
-		case NewLineType::LF:
-			_nl = "\n";
-			break;
-
-		case NewLineType::CRLF:
-			_nl = "\r\n";
-			break;
-		}
-	}
-
-	OutputInterface::OutputInterface(const OutputInterface& copy)
-		: _type(copy._type)
-		, _hFile(copy._hFile)
-		, _strPtr(copy._strPtr)
-		, _nl(copy._nl)
-	{
-	}
-
-	OutputInterface& OutputInterface::operator=(const OutputInterface& copy)
-	{
-		_type = copy._type;
-		_hFile = copy._hFile;
-		_strPtr = copy._strPtr;
-		return *this;
-	}
-
-	OutputInterface& OutputInterface::operator<<(const std::string& str)
-	{
-		DWORD dw = 0;
-		switch (_type)
-		{
-			case Type::None:
-				return *this;
-
-			case Type::Console:
-				std::cout << str;
-				break;
-
-			case Type::String:
-				(*_strPtr) += str;
-				break;
-
-			case Type::File:
-				WriteFile(_hFile, &str[0], static_cast<DWORD>(str.length()), &dw, NULL);
-				break;
-		}
-
-		return *this;
-	}
-
-	OutputInterface& OutputInterface::operator<<(const NewLine&)
-	{
-		(*this) << _nl;
-		return *this;
-	}
-
-	bool OutputInterface::IsReady() const
-	{
-		return (_type != Type::None);
-	}
-
 	NodePtr Node::Produce(Node::Type type, Node* top, OutputInterface::Type outputType, OutputInterface::NewLineType nlType, void* outputPtr)
 	{
 		switch (type)
@@ -106,7 +16,7 @@ namespace cJass
 			PRODUCING_NODE_ROOT(GlobalSpace);
 			PRODUCING_NODE(Function);
 			PRODUCING_NODE(Comment);
-			PRODUCING_NODE(OperationUnit);
+			PRODUCING_NODE(OperationObject);
 			PRODUCING_NODE(LocalDeclaration);
 		default:
 			return nullptr;
@@ -185,7 +95,7 @@ namespace cJass
 			n++;
 		}
 
-		throw std::runtime_error("Node::AtNode:Out of subnode's list boundaries.");
+		throw std::runtime_error("Node::AtNode: Out of subnode's list boundaries.");
 		return nullptr;
 	}
 
@@ -237,7 +147,11 @@ namespace cJass
 	{
 		size_t size = strings.size();
 		if (size % 3 != 0)
-			throw std::runtime_error("GlobalSpace::InitData - wrong set of input data.");
+		{
+			appLog(Critical) << "GlobalSpace::InitData: Wrong set of input data. Got" << size << ", expected" << "3";
+			appLog(Debug) << "Args:" << strings;
+			return;
+		}
 
 		if (size == 0)
 			return;
@@ -281,7 +195,11 @@ namespace cJass
 	{
 		size_t size = strings.size();
 		if (size != 1)
-			throw std::runtime_error("Comment::InitData - wrong set of input data.");
+		{
+			appLog(Critical) << "Comment::InitData: Wrong set of input data. Got" << size << ", expected" << "1";
+			appLog(Debug) << "Args:" << strings;
+			return;
+		}
 
 		_comment = strings[0];
 		size_t last = _comment.size() - 1;
@@ -335,7 +253,11 @@ namespace cJass
 	{
 		size_t size = strings.size();
 		if (size < 2)
-			throw std::runtime_error("Function::InitData - wrong set of input data.");
+		{
+			appLog(Critical) << "Function::InitData: Wrong set of input data. Got" << size << ", expected" << "2";
+			appLog(Debug) << "Args:" << strings;
+			return;
+		}
 
 		_returnType = strings[0];
 		_name = strings[1];
@@ -371,17 +293,19 @@ namespace cJass
 		return cnst;
 	}
 
-	OperationUnit::OperationUnit(Node* top)
-		: Node(Node::Type::OperationUnit, top)
+	OperationObject::OperationObject(Node* top)
+		: Node(Node::Type::OperationObject, top)
 		, _opText("")
 		, _extra("")
 		, _otype(OpType::Unknown)
 		, _inBrackets(false)
+		, _unaryExpr(false)
 	{
 	}
 
-	void OperationUnit::ToLua()
+	void OperationObject::ToLua()
 	{
+		size_t nodeCount, lastIndex;
 		if (_otype != OpType::Unknown)
 		{
 			if (_isNewLine)
@@ -408,6 +332,29 @@ namespace cJass
 			_out << op2lua(_opText);
 			break;
 
+		case OpType::UnaryOperator:
+			if (!_unaryExpr)
+			{
+				if (_extra == "++")
+					_out << _opText << " = " << _opText << " + 1";
+				else if (_extra == "--")
+					_out << _opText << " = " << _opText << " - 1";
+				else
+					appLog(Warning) << "Unsupported unary operator." << _extra;
+			}
+			else
+			{
+				_out << _opText << " = " << _opText << std::string({ ' ', _extra[0], ' ' });
+				for (auto& node : _subnodes)
+					node->ToLua();
+			}
+			break;
+
+		case OpType::Argument:
+			for (auto& node : _subnodes)
+				node->ToLua();
+			break;
+
 		case OpType::Expression:
 			if (_inBrackets)
 				_out << "(";
@@ -417,6 +364,23 @@ namespace cJass
 
 			if (_inBrackets)
 				_out << ")";
+			break;
+
+		case OpType::Call:
+			_out << _opText << "(";
+			nodeCount = CountSubnodes();
+			if (nodeCount > 0)
+			{
+				lastIndex = nodeCount - 1;
+				for (size_t i = 0; i <= lastIndex; i++)
+				{
+					auto node = AtNode(i);
+					node->ToLua();
+					if (i != lastIndex)
+						_out << ", ";
+				}
+			}
+			_out << ")";
 			break;
 
 		case OpType::Wrapper:
@@ -446,20 +410,27 @@ namespace cJass
 				node->ToLua();
 			_out << "]";
 			break;
+		
+		default:
+			appLog(Warning) << "OperationObject::ToLua: Unsupported OpType.";
 		}
 	}
 
-	void OperationUnit::InitData(const std::vector<std::string>& strings)
+	void OperationObject::InitData(const std::vector<std::string>& strings)
 	{
 		size_t size = strings.size();
 		
 		if (size == 0 || size > 3)
-			throw std::runtime_error("Operationl::InitData - wrong set of input data.");
+		{
+			appLog(Critical) << "OperationObject::InitData: Wrong set of input data. Got" << size << ", expected" << "3";
+			appLog(Debug) << "Args:" << strings;
+			return;
+		}
 
 		auto& s = strings[0];
 
 		if (s.length() < 1 || s.length() > 2)
-			throw std::runtime_error("Operationl::InitData - wrong key length.");
+			throw std::runtime_error("OperationObject::InitData: wrong key length.");
 
 		switch (s[0])
 		{
@@ -482,6 +453,10 @@ namespace cJass
 			_otype = OpType::Expression;
 			if (s[1] == 'b')
 				_inBrackets = true;
+			break;
+
+		case 'a':
+			_otype = OpType::Argument;
 			break;
 
 		case 'r':
@@ -510,11 +485,6 @@ namespace cJass
 			_otype = OpType::Lambda;
 			break;
 
-		case 'a':
-			_otype = OpType::AtomicOperand;
-			_opText = strings[1];
-			break;
-
 		case 'o':
 			_otype = OpType::Operator;
 			_opText = strings[1];
@@ -524,6 +494,8 @@ namespace cJass
 			_otype = OpType::UnaryOperator;
 			_opText = strings[1];
 			_extra = strings[2];
+			if (s[1] == 'e')
+				_unaryExpr = true;
 			break;
 
 		case 'W':
@@ -535,17 +507,17 @@ namespace cJass
 			break;
 
 		default:
-			throw std::runtime_error("Operationl::InitData - unknown key.");
+			appLog(Warning) << "OperationObject::InitData: unknown key.";
 		}
 
 	}
 
-	OperationUnit::OpType OperationUnit::GetOpType() const
+	OperationObject::OpType OperationObject::GetOpType() const
 	{
 		return _otype;
 	}
 
-	bool OperationUnit::isEmpty() const
+	bool OperationObject::isEmpty() const
 	{
 		return (_opText == "");
 	}
@@ -624,6 +596,7 @@ namespace cJass
 
 	void LocalDeclaration::InitData(const std::vector<std::string>& strings)
 	{
+		appLog(Debug) << "LocalDeclaration::InitData Args:" << strings;
 		_type == strings[0];
 	}
 
@@ -639,9 +612,10 @@ namespace cJass
 
 	Node* LocalDeclaration::AddVariable(const std::string& name, const std::string& arrSize)
 	{
+		appLog(Debug) << "Adding local variable" << name;
 		_vars.push_back(name);
 		_arrSizes.push_back(arrSize);
-		auto node = Node::Produce(Node::Type::OperationUnit, this);
+		auto node = Node::Produce(Node::Type::OperationObject, this);
 		node->InitData({ "x" });
 		AddSubnode(node);
 		return node->Ptr();

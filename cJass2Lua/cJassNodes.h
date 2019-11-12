@@ -4,6 +4,8 @@
 #include <memory>
 #include <Windows.h>
 
+#include "OutputInterface.h"
+
 namespace cJass
 {
 	struct variable_t
@@ -11,46 +13,6 @@ namespace cJass
 		std::string type;
 		std::string name;
 		std::string initValue;
-	};
-
-	class OutputInterface
-	{
-	public:
-		enum class Type
-		{
-			None,
-			File,
-			Console,
-			String
-		};
-
-		enum class NewLineType
-		{
-			CR,
-			LF,
-			CRLF
-		};
-
-		class NewLine {};
-		static NewLine nl;
-
-	private:
-		Type			_type;
-		HANDLE			_hFile;
-		std::string*	_strPtr;
-		std::string		_nl;
-
-	public:
-
-		OutputInterface();
-		OutputInterface(Type type, NewLineType nlType, void* ptr);
-		OutputInterface(const OutputInterface& copy);
-
-		bool IsReady() const;
-		
-		OutputInterface& operator=(const OutputInterface& copy);
-		OutputInterface& operator<<(const std::string& str);
-		OutputInterface& operator<<(const NewLine&);
 	};
 
 	class Node
@@ -62,7 +24,7 @@ namespace cJass
 			GlobalSpace,
 			Function,
 			Comment,
-			OperationUnit,
+			OperationObject,
 			LocalDeclaration
 		};
 
@@ -141,13 +103,14 @@ namespace cJass
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
 
-	class OperationUnit : public Node
+	class OperationObject : public Node
 	{
 	public:
 		enum class OpType
 		{
 			Unknown,
 			Constant,
+			Argument,
 			Expression,
 			Call,
 			If,
@@ -156,7 +119,6 @@ namespace cJass
 			Else,
 			While,
 			Lambda,
-			AtomicOperand,
 			Operator,
 			UnaryOperator,
 			Id,
@@ -169,9 +131,10 @@ namespace cJass
 		std::string		_extra;
 		OpType			_otype;
 		bool			_inBrackets;
+		bool			_unaryExpr;
 
 	public:
-		OperationUnit(Node* top);
+		OperationObject(Node* top);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 		OpType GetOpType() const;
