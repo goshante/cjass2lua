@@ -2,6 +2,8 @@
 #include "reutils.h"
 #include <sstream>
 
+#define DOC_LINEPOS "(" << _line << ":" << _wordPos << ")"
+
 void stack_incr_top(std::stack<int>& st)
 {
 	int i = st.top();
@@ -334,7 +336,12 @@ namespace cJass
 	void Parser2::_pop()
 	{
 		if (_activeNode->Top() != nullptr)
+		{
+			appLog(Debug) << "Popping node" << Node::ToString(_activeNode);
 			_activeNode = _activeNode->Top();
+		}
+		else
+			appLog(Warning) << "Attempted to pop root node!";
 	}
 
 	Node* Parser2::_addNode(cJass::Node::Type type, const std::vector<std::string> data, bool makeActive)
@@ -424,9 +431,9 @@ namespace cJass
 					wtype = word_t::expClose;
 					break;
 
-					/*case ctype_t::bBeg:
-						_word = "{";
-						break;*/
+				/*case ctype_t::bBeg:
+					_word = "{";
+					break;*/
 
 				case ctype_t::bEnd:
 					_word = "}";
@@ -510,7 +517,7 @@ namespace cJass
 					if (_word == "endglobals")
 					{
 						appLog(Debug) << "End parsing globals";
-						pops();
+						subjectStack.pop();
 						vec_arg.clear();
 						goto parseWordEnd;
 					}
@@ -546,7 +553,7 @@ namespace cJass
 					if (_word == "enddefine")
 					{
 						appLog(Debug) << "End parsing defines";
-						pops();
+						subjectStack.pop();
 						goto parseWordEnd;
 					}
 
@@ -614,10 +621,13 @@ namespace cJass
 				static bool varAdded = false;
 				static bool writingArrDecl = false;
 				static bool wrapperCreated = false;
-				static bool allowWrappers = false;
+				static bool allowWrappers = true;
 				bool isLocalTop = _activeNode->GetType() == Node::Type::LocalDeclaration;
 				bool isVarExprTop = (_activeNode->GetType() == Node::Type::OperationObject
 					&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::VarInitExpression);
+
+				if (_word == "flag")
+					_word = _word;
 
 				if (subjectStack.top() == ParseTag2_t::call && argCount.top() == 0 && wtype != word_t::expClose)
 				{
@@ -642,9 +652,6 @@ namespace cJass
 						varArrSize += _word;
 					goto parseWordEnd;
 				}
-
-				if (_word == "varsdg1")
-					_word = _word;
 
 				switch (wtype)
 				{
@@ -671,6 +678,17 @@ namespace cJass
 					break;
 
 				case word_t::type:
+					if (_activeNode->GetType() == Node::Type::OperationObject
+						&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Call
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Argument
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Expression
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::VarInitExpression
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Index
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return))
+					{
+						appLog(Warning) << "Unexpected typename" << _word << DOC_LINEPOS;
+						goto parseWordEnd;
+					}
 					_addNode(Node::Type::LocalDeclaration, { _word }, true);
 					varAdded = false;
 					allowWrappers = false;
@@ -754,6 +772,13 @@ namespace cJass
 					break;
 
 				case word_t::indexOpen:
+					if (_activeNode->GetType() == Node::Type::OperationObject
+						&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Index)
+					{
+						appLog(Warning) << "Declaring array index with bracket [, but another array index declaration is already in progress." << DOC_LINEPOS;
+						goto parseWordEnd;
+					}
+
 					if (isLocalTop)
 						writingArrDecl = true;
 					else if (_lastAddedNode->GetType() == Node::Type::OperationObject
@@ -767,10 +792,17 @@ namespace cJass
 						_activeNode = tmpNode->Ptr();
 					}
 					else
-						appLog(Warning) << "Wrong usage of array brackets. Must be after identifier!";
+						appLog(Warning) << "Wrong usage of array brackets. Must be after identifier!" << DOC_LINEPOS;
 					break;
 
 				case word_t::indexClose:
+					if (_activeNode->GetType() != Node::Type::OperationObject
+						|| _activeNode->Ptr<OperationObject>()->GetOpType() != OperationObject::OpType::Index)
+					{
+						appLog(Warning) << "Closing array index ] bracket, but no array has been declared." << DOC_LINEPOS;
+						goto parseWordEnd;
+					}
+
 					_activeNode = arrNodeStackActive.top();
 					_lastAddedNode = arrNodeStackLast.top();
 					arrNodeStackLast.pop();
@@ -797,7 +829,10 @@ namespace cJass
 					if (isLocalTop || isVarExprTop)
 					{
 						if (isVarExprTop)
+						{
 							_pop();
+							isLocalTop = true;
+						}
 
 						if (!varAdded)
 						{
@@ -824,7 +859,7 @@ namespace cJass
 							stack_incr_top(argCount);
 						}
 						else
-							appLog(Warning) << "Unexpected comma.(" << _line << ":" << _wordPos << ")This is not function call.";
+							appLog(Warning) << "Unexpected usage of ," << DOC_LINEPOS << "This is not function call or variable enumeration.";
 					}
 					break;
 
@@ -832,9 +867,20 @@ namespace cJass
 					break;
 
 				case word_t::end:
-					if (isVarExprTop)
-						_pop();
+					if (_activeNode->GetType() == Node::Type::OperationObject
+						&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Expression
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Call))
+					{
+						appLog(Warning) << "Missing expression or call close )" << DOC_LINEPOS;
+						goto parseWordEnd;
+					}
 
+					if (isVarExprTop)
+					{
+						_pop();
+						isLocalTop = true;
+					}
+						
 					if (isLocalTop)
 					{
 						if (!varAdded)
@@ -845,11 +891,11 @@ namespace cJass
 						{
 							varAdded = false;
 						}
-						allowWrappers = true;
 						varName = "";
 						varArrSize = "";
+						allowWrappers = true;
 					}
-
+					
 					if (wrapperCreated)
 						wrapperCreated = false;
 					_pop();
@@ -987,7 +1033,15 @@ namespace cJass
 
 				case ctype_t::dot:
 					if (!reu::IsMatching(_word, "^[0-9\\.]+$"))
-						parseWord();
+					{
+						if (reu::IsMatching(_word, "^[a-zA-Z_][a-zA-Z0-9_]*$"))
+						{
+							appLog(Critical) << "Member/method detected on " << DOC_LINEPOS << "! Classes/Structures/Objects are not yet supported.";
+							return;
+						}
+						else
+							parseWord();
+					}
 					_word.push_back(c);
 					break;
 
@@ -1028,7 +1082,7 @@ namespace cJass
 		}
 		catch (const std::exception& ex)
 		{
-			appLog(Warning) << "Possible problem on line "  << _line << ", position " << _wordPos << ".";
+			appLog(Warning) << "Possible problem on " << DOC_LINEPOS << ".";
 			throw std::runtime_error(ex.what());
 		}
 	}

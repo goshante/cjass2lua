@@ -29,7 +29,7 @@ namespace _____LOGGER
 			Writer& operator=(const Writer&) = delete;
 
 		public:
-			Writer(const std::string& file, const std::string& func, int line, Level level, Logger& logger);
+			Writer(std::string file, const std::string& func, int line, Level level, Logger& logger);
 			~Writer();
 
 			Writer& operator<<(const std::string& str);

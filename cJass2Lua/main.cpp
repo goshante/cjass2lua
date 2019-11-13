@@ -22,8 +22,8 @@ int main()
 	std::string	inputFile		 =	"D:\\test\\test2.j";
 	std::string text			 =  FileToString(inputFile);
 	std::string outputFilePath   =  "D:\\test\\output.lua";
-
 	cJass::Parser2 parser(OutputInterface::Type::File, OutputInterface::NewLineType::LF, outputFilePath);
+
 	try
 	{
 		parser.Parse(text, inputFile);
@@ -33,6 +33,8 @@ int main()
 	{
 		appLog(Fatal) << ex.what();
 	}
+
+	appLog(Info) << "Exiting";
 
 	system("pause");
 	return 0;

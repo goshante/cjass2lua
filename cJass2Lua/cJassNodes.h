@@ -48,6 +48,8 @@ namespace cJass
 			, OutputInterface::Type outputType = OutputInterface::Type::None
 			, OutputInterface::NewLineType nlType = OutputInterface::NewLineType::LF);
 
+		static std::string ToString(Node* node);
+
 		Node(Type type = Type::Undefined, Node* top = nullptr);
 		virtual ~Node();
 

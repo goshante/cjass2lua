@@ -21,6 +21,103 @@ namespace cJass
 		}
 	}
 
+	std::string Node::ToString(Node* node)
+	{
+		std::string res;
+		switch (node->_type)
+		{
+		case Type::Comment:
+			return "Comment";
+		
+		case Type::Function:
+			return "Function";
+
+		case Type::GlobalSpace:
+			return "GlobalSpace";
+
+		case Type::LocalDeclaration:
+			return "LocalDeclaration";
+
+		case Type::OperationObject:
+			res = "OperationObject(";
+			switch (node->Ptr<OperationObject>()->GetOpType())
+			{
+			case OperationObject::OpType::Argument:
+				res += "Argument";
+				break;
+
+			case OperationObject::OpType::Call:
+				res += "Call";
+				break;
+
+			case OperationObject::OpType::Constant:
+				res += "Constant";
+				break;
+
+			case OperationObject::OpType::Else:
+				res += "Else";
+				break;
+
+			case OperationObject::OpType::Elseif:
+				res += "Elseif";
+				break;
+
+			case OperationObject::OpType::Expression:
+				res += "Expression";
+				break;
+
+			case OperationObject::OpType::Id:
+				res += "Id";
+				break;
+
+			case OperationObject::OpType::If:
+				res += "If";
+				break;
+
+			case OperationObject::OpType::Index:
+				res += "Index";
+				break;
+
+			case OperationObject::OpType::Lambda:
+				res += "Lambda";
+				break;
+
+			case OperationObject::OpType::Operator:
+				res += "Operator";
+				break;
+
+			case OperationObject::OpType::Return:
+				res += "Return";
+				break;
+
+			case OperationObject::OpType::UnaryOperator:
+				res += "UnaryOperator";
+				break;
+
+			case OperationObject::OpType::Unknown:
+				res += "Unknown";
+				break;
+
+			case OperationObject::OpType::VarInitExpression:
+				res += "VarInitExpression";
+				break;
+
+			case OperationObject::OpType::While:
+				res += "While";
+				break;
+
+			case OperationObject::OpType::Wrapper:
+				res += "Wrapper";
+				break;
+			}
+			res += ")";
+			return res;
+
+		default:
+			return "Undefined";
+		}
+	}
+
 	Node::Node(Type type, Node* top) 
 		: _type(type)
 		, _top(top)
@@ -535,34 +632,6 @@ namespace cJass
 		PrintTabs();
 		_out << "local ";
 
-		//Group vars with init to begin
-		size_t lastEmptyVar = ~0;
-		auto it = _subnodes.begin();
-		auto eit = _subnodes.end();
-		for (size_t i = 0; i < _vars.size(); i++)
-		{
-			auto expr = AtNode(i);
-			if (expr->CountSubnodes() > 0 || _arrSizes[i] != "")
-			{
-				if (i > lastEmptyVar)
-				{
-					std::swap(*it, *eit);
-					std::swap(_vars[i], _vars[lastEmptyVar]);
-					std::swap(_arrSizes[i], _arrSizes[lastEmptyVar]);
-
-					lastEmptyVar = i;
-					eit = it;
-				}
-			}
-			else if (lastEmptyVar == ~0)
-			{
-				lastEmptyVar = i;
-				eit = it;
-			}
-
-			it++;
-		}
-
 		for (size_t i = 0; i < _vars.size(); i++)
 		{
 			_out << _vars[i];
@@ -578,7 +647,7 @@ namespace cJass
 				{
 					expr = AtNode(j);
 					if (_arrSizes[j] == "" && expr->CountSubnodes() == 0)
-						break;
+						continue;
 					else if (j != 0)
 						_out << ", ";
 
