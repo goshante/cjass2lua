@@ -90,10 +90,15 @@ namespace _____LOGGER
 	 *	  WRITER	*
 	 ****************/
 
-	Logger::Writer::Writer(const std::string& file, const std::string& func, int line, Level level, Logger& logger) : _logger(&logger)
+	Logger::Writer::Writer(std::string file, const std::string& func, int line, Level level, Logger& logger) : _logger(&logger)
 	{
 		_writeMutex.lock();
-		logger._file = file;
+		if (file.find("/") != std::string::npos)
+			logger._file = file.substr(file.find_last_of("/") + 1, file.length() - 1);
+		else if (file.find("\\") != std::string::npos)
+			logger._file = file.substr(file.find_last_of("\\") + 1, file.length() - 1);
+		else
+			logger._file = file;
 		logger._line = line;
 		logger._func = func;
 		logger._level = level;
