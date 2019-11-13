@@ -1,7 +1,8 @@
 #pragma once
 
 #include <string>
-#include <Windows.h>
+#include <fstream>
+#include <memory>
 
 class OutputInterface
 {
@@ -25,17 +26,17 @@ public:
 	static NewLine nl;
 
 protected:
-	Type			_type;
-	HANDLE			_hFile;
-	std::string*	_strPtr;
-	std::string		_nl;
+	Type							_type;
+	std::shared_ptr<std::ofstream>	_file;
+	std::string*					_strPtr;
+	std::string						_nl;
 
 	virtual void _toOutput(const std::string& str);
 
 public:
 
 	OutputInterface();
-	OutputInterface(Type type, NewLineType nlType, void* ptr);
+	OutputInterface(Type type, NewLineType nlType, std::string& fileNameOrString);
 	OutputInterface(const OutputInterface& copy);
 	virtual ~OutputInterface(){}
 

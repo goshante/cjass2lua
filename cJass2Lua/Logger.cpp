@@ -7,6 +7,8 @@
 
 namespace _____LOGGER
 {
+	std::mutex Logger::Writer::_writeMutex;
+
 	std::string _generateTimeStamp()
 	{
 		char date[64];
@@ -22,11 +24,11 @@ namespace _____LOGGER
 	 *	  LOGGER	*
 	 ****************/
 
-	Logger::Logger(const std::string fileName) :
+	Logger::Logger(OutputInterface::Type outType, std::string fileName) :
 		OutputInterface
-		(Type::File
+		(	  outType
 			, NewLineType::CRLF
-			, nullptr
+			, fileName
 		)
 		, _level(Level::Info)
 		, _file("None")
@@ -34,16 +36,12 @@ namespace _____LOGGER
 		, _func("?")
 		, _buffer("")
 		, _logFileName(fileName)
+		, _doNotAppendSpaces(false)
 	{
-		_hFile = CreateFileA(_logFileName.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
-			CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-		CloseHandle(_hFile);
 	}
 
 	Logger::~Logger()
 	{
-		if (_hFile != NULL)
-			CloseHandle(_hFile);
 	}
 
 	std::string Logger::_levelToString()
@@ -72,122 +70,65 @@ namespace _____LOGGER
 
 	void Logger::_toOutput(const std::string& str)
 	{
-		_buffer += str + " ";
+		_buffer += str;
+		if (!_doNotAppendSpaces)
+			_buffer += " ";
 	}
 
 	void Logger::_write()
 	{
 		if (_buffer != "")
 		{
-			_writeMutex.lock();
-			_hFile = CreateFileA(_logFileName.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
-				OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 			std::ostringstream ss;
 			ss << _generateTimeStamp() << "[" << _file << ":" << _line << " (" << _func << ")] [" << _levelToString() << "]:\t" << _buffer << _nl;
 			OutputInterface::_toOutput(ss.str());
 			_buffer = "";
-			CloseHandle(_hFile);
-			_hFile = NULL;
-			_writeMutex.unlock();
 		}
-	}
-
-	void Logger::prepare(const std::string& file, const std::string& func, int line, Level level)
-	{
-		_file  = file;
-		_line  = line;
-		_func  = func;
-		_level = level;
 	}
 
 	/****************
 	 *	  WRITER	*
 	 ****************/
 
-	Logger::Writer::Writer(Logger& logger) : _logger(logger)
+	Logger::Writer::Writer(const std::string& file, const std::string& func, int line, Level level, Logger& logger) : _logger(&logger)
 	{
+		_writeMutex.lock();
+		logger._file = file;
+		logger._line = line;
+		logger._func = func;
+		logger._level = level;
 	}
 
 	Logger::Writer::~Writer()
 	{
-		_logger._write();
+		_logger->_write();
+		_writeMutex.unlock();
 	}
 
 	Logger::Writer& Logger::Writer::operator<<(const std::string& str)
 	{
-		_logger._toOutput(str);
-		return *this;
-	}
-
-	Logger::Writer& Logger::Writer::operator<<(signed long n)
-	{
-		_logger._toOutput(std::to_string(n));
-		return *this;
-	}
-
-	Logger::Writer& Logger::Writer::operator<<(unsigned long n)
-	{
-		_logger._toOutput(std::to_string(n));
-		return *this;
-	}
-
-	Logger::Writer& Logger::Writer::operator<<(signed long long n)
-	{
-		_logger._toOutput(std::to_string(n));
-		return *this;
-	}
-
-	Logger::Writer& Logger::Writer::operator<<(unsigned long long n)
-	{
-		_logger._toOutput(std::to_string(n));
-		return *this;
-	}
-
-	Logger::Writer& Logger::Writer::operator<<(char c)
-	{
-		_logger._toOutput(std::string({ c }));
-		return *this;
-	}
-
-	Logger::Writer& Logger::Writer::operator<<(BYTE b)
-	{
-		char buf[8] = { '\0' };
-		sprintf_s(buf, sizeof(buf), "0x%X", b);
-		std::string str(buf);
-		_logger._toOutput(str);
-		return *this;
-	}
-
-	Logger::Writer& Logger::Writer::operator<<(float f)
-	{
-		_logger._toOutput(std::to_string(f));
-		return *this;
-	}
-
-	Logger::Writer& Logger::Writer::operator<<(double d)
-	{
-		_logger._toOutput(std::to_string(d));
+		_logger->_toOutput(str);
 		return *this;
 	}
 
 	Logger::Writer& Logger::Writer::operator<<(const NewLine&)
 	{
-		_logger._toOutput(_logger._nl);
+		_logger->_toOutput(_logger->_nl);
 		return *this;
 	}
 
-	Logger::Writer& Logger::Writer::operator<<(const std::vector<std::string> strings)
+	Logger::Writer& Logger::Writer::operator<<(const std::vector<std::string>& strings)
 	{
-		_logger._toOutput("{ ");
+		_logger->_doNotAppendSpaces = true;
+		_logger->_toOutput("{ ");
 		for (size_t i = 0; i < strings.size(); i++)
 		{
-			_logger._toOutput("\"");
-			_logger._toOutput(strings[i]);
-			_logger._toOutput("\"");
+			_logger->_toOutput("\"" + strings[i] + "\"");
 			if (i != strings.size() - 1)
-				_logger._toOutput(", ");
+				_logger->_toOutput(", ");
 		}
-		_logger._toOutput(" }");
+		_logger->_toOutput(" }");
+		_logger->_doNotAppendSpaces = false;
 		return *this;
 	}
 }

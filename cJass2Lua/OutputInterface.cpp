@@ -7,24 +7,31 @@ OutputInterface::NewLine OutputInterface::nl;
 
 OutputInterface::OutputInterface()
 	: _type(Type::None)
-	, _hFile(NULL)
+	, _file(nullptr)
 	, _strPtr(nullptr)
 	, _nl("\r\n")
 {
 }
 
-OutputInterface::OutputInterface(Type type, NewLineType nlType, void* ptr)
+void ofstreamDeleter(std::ofstream* p) 
+{
+	p->close();
+	delete p;
+}
+
+OutputInterface::OutputInterface(Type type, NewLineType nlType, std::string& fileNameOrString)
 	: _type(type)
-	, _hFile(NULL)
+	, _file(nullptr)
 	, _strPtr(nullptr)
 {
 	switch (type)
 	{
 	case Type::String:
-		_strPtr = static_cast<std::string*>(ptr);
+		_strPtr = &fileNameOrString;
 		break;
 	case Type::File:
-		_hFile = static_cast<HANDLE>(ptr);
+		_file = std::shared_ptr<std::ofstream>(new std::ofstream, ofstreamDeleter);
+		_file->open(fileNameOrString, std::ios::out | std::ios_base::trunc | std::ios::binary);
 		break;
 	}
 
@@ -45,7 +52,7 @@ OutputInterface::OutputInterface(Type type, NewLineType nlType, void* ptr)
 
 OutputInterface::OutputInterface(const OutputInterface& copy)
 	: _type(copy._type)
-	, _hFile(copy._hFile)
+	, _file(_file)
 	, _strPtr(copy._strPtr)
 	, _nl(copy._nl)
 {
@@ -54,14 +61,13 @@ OutputInterface::OutputInterface(const OutputInterface& copy)
 OutputInterface& OutputInterface::operator=(const OutputInterface& copy)
 {
 	_type = copy._type;
-	_hFile = copy._hFile;
+	_file = copy._file;
 	_strPtr = copy._strPtr;
 	return *this;
 }
 
 void OutputInterface::_toOutput(const std::string& str)
 {
-	DWORD dw = 0;
 	switch (_type)
 	{
 	case Type::None:
@@ -76,7 +82,8 @@ void OutputInterface::_toOutput(const std::string& str)
 		break;
 
 	case Type::File:
-		WriteFile(_hFile, &str[0], static_cast<DWORD>(str.length()), &dw, NULL);
+		(*_file) << str;
+		_file->flush();
 		break;
 	}
 }
