@@ -43,7 +43,7 @@ namespace cJass
 		void _touchTag(ParseTag_t t);
 
 	public:
-		Parser(csref_t text, OutputInterface::Type outputType, OutputInterface::NewLineType nlType = OutputInterface::NewLineType::LF, void* outputPtr = nullptr);
+		Parser(csref_t text, OutputInterface::Type outputType, std::string& fileNameOrString, OutputInterface::NewLineType nlType = OutputInterface::NewLineType::LF);
 
 		void Parse();
 		void ToLua();

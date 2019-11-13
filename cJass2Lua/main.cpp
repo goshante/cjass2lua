@@ -17,16 +17,13 @@ std::string FileToString(std::string path)
 
 int main()
 {
-	appLog(Debug) << "Starting cJass2Lua application";
+	appLog(Info) << "Starting cJass2Lua application";
 
 	std::string	inputFile		 =	"D:\\test\\test2.j";
 	std::string text			 =  FileToString(inputFile);
 	std::string outputFilePath   =  "D:\\test\\output.lua";
-	HANDLE hFile = CreateFileA(outputFilePath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
-		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
-	cJass::Parser2 parser(OutputInterface::Type::File, OutputInterface::NewLineType::LF, hFile);
-
+	cJass::Parser2 parser(OutputInterface::Type::File, OutputInterface::NewLineType::LF, outputFilePath);
 	try
 	{
 		parser.Parse(text, inputFile);
@@ -37,7 +34,6 @@ int main()
 		appLog(Fatal) << ex.what();
 	}
 
-	CloseHandle(hFile);
 	system("pause");
 	return 0;
 }

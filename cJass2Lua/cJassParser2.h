@@ -27,7 +27,7 @@ namespace cJass
 		size_t _depth() const;
 
 	public:
-		Parser2(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, void* outputPtr = nullptr);
+		Parser2(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString);
 
 		void Parse(csref_t text, csref_t cjassFileName);
 		void ToLua();

@@ -1,25 +1,23 @@
 #include "cJassNodes.h"
 #include "reutils.h"
 
-#define PRODUCING_NODE_ROOT(__node__) case Node::Type::##__node__: \
-							return std::shared_ptr<##__node__>(new __node__(outputType, nlType, outputPtr))
+#define d if (1 == 2) \
 
 #define PRODUCING_NODE(__node__) case Node::Type::##__node__: \
-							return std::shared_ptr<__node__>(new __node__(top))
+			return std::shared_ptr<__node__>(new __node__(top))
 
 namespace cJass
 {
-	NodePtr Node::Produce(Node::Type type, Node* top, OutputInterface::Type outputType, OutputInterface::NewLineType nlType, void* outputPtr)
+	NodePtr Node::Produce(Node::Type type, Node* top, OutputInterface::Type outputType, OutputInterface::NewLineType nlType)
 	{
 		switch (type)
 		{
-			PRODUCING_NODE_ROOT(GlobalSpace);
 			PRODUCING_NODE(Function);
 			PRODUCING_NODE(Comment);
 			PRODUCING_NODE(OperationObject);
 			PRODUCING_NODE(LocalDeclaration);
 		default:
-			return nullptr;
+			throw std::runtime_error("Error! Node GlobalSpace cannot be produced!");
 		}
 	}
 
@@ -120,11 +118,11 @@ namespace cJass
 		return _depthIndex;
 	}
 
-	GlobalSpace::GlobalSpace(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, void* outputPtr)
+	GlobalSpace::GlobalSpace(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString)
 		: Node(Node::Type::GlobalSpace, nullptr)
 		, _globals({})
 	{
-		_out = OutputInterface(outputType, nlType, outputPtr);
+		_out = OutputInterface(outputType, nlType, fileNameOrString);
 	}
 
 	void GlobalSpace::ToLua() 
@@ -339,8 +337,6 @@ namespace cJass
 					_out << _opText << " = " << _opText << " + 1";
 				else if (_extra == "--")
 					_out << _opText << " = " << _opText << " - 1";
-				else
-					appLog(Warning) << "Unsupported unary operator." << _extra;
 			}
 			else
 			{
@@ -355,6 +351,7 @@ namespace cJass
 				node->ToLua();
 			break;
 
+		case OpType::VarInitExpression:
 		case OpType::Expression:
 			if (_inBrackets)
 				_out << "(";
@@ -453,6 +450,9 @@ namespace cJass
 			_otype = OpType::Expression;
 			if (s[1] == 'b')
 				_inBrackets = true;
+			break;
+		case 'v':
+			_otype = OpType::VarInitExpression;
 			break;
 
 		case 'a':
@@ -616,7 +616,7 @@ namespace cJass
 		_vars.push_back(name);
 		_arrSizes.push_back(arrSize);
 		auto node = Node::Produce(Node::Type::OperationObject, this);
-		node->InitData({ "x" });
+		node->InitData({ "v" });
 		AddSubnode(node);
 		return node->Ptr();
 	}

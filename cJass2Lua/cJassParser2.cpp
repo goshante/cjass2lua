@@ -318,10 +318,10 @@ namespace cJass
 		return ctype_t::unk;
 	}
 
-	Parser2::Parser2(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, void* outputPtr)
+	Parser2::Parser2(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString)
 		: _text("")
 		, _word("")
-		, _rootNode(outputType, nlType, outputPtr)
+		, _rootNode(outputType, nlType, fileNameOrString)
 		, _activeNode(&_rootNode)
 		, _lastAddedNode(&_rootNode)
 		, _unitIsComplete(false)
@@ -393,7 +393,6 @@ namespace cJass
 			&isMultilineComment, &isRawCode, &subjectStack](ctype_t explicitParse = ctype_t::undefined) -> void
 		{
 			static bool globalVarDeclaration = false;
-			static bool localVarDeclaration = false;
 			static size_t ignoreLine = ~0;
 			static word_t wtype = word_t::undefined;
 			static word_t wtype_prev = word_t::undefined;
@@ -615,6 +614,10 @@ namespace cJass
 				static bool varAdded = false;
 				static bool writingArrDecl = false;
 				static bool wrapperCreated = false;
+				static bool allowWrappers = false;
+				bool isLocalTop = _activeNode->GetType() == Node::Type::LocalDeclaration;
+				bool isVarExprTop = (_activeNode->GetType() == Node::Type::OperationObject
+					&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::VarInitExpression);
 
 				if (subjectStack.top() == ParseTag2_t::call && argCount.top() == 0 && wtype != word_t::expClose)
 				{
@@ -640,6 +643,9 @@ namespace cJass
 					goto parseWordEnd;
 				}
 
+				if (_word == "varsdg1")
+					_word = _word;
+
 				switch (wtype)
 				{
 				case word_t::retn:
@@ -648,13 +654,13 @@ namespace cJass
 					break;
 
 				case word_t::id:
-					if (localVarDeclaration && !varAdded)
+					if (isLocalTop && !varAdded)
 					{
 						varName = _word;
 					}
 					else
 					{
-						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret)
+						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret && allowWrappers)
 						{
 							_addNode(Node::Type::OperationObject, { "W" }, true);
 							wrapperCreated = true;
@@ -665,24 +671,20 @@ namespace cJass
 					break;
 
 				case word_t::type:
-					localVarDeclaration = true;
-					tmpNode = Node::Produce(Node::Type::LocalDeclaration, _activeNode);
-					tmpNode->InitData({ _word });
-					prevActive = _activeNode;
-					_activeNode = tmpNode->Ptr();
+					_addNode(Node::Type::LocalDeclaration, { _word }, true);
 					varAdded = false;
+					allowWrappers = false;
 					break;
 
 				case word_t::op:
-					if (localVarDeclaration && _word == "=")
+					if (isLocalTop && _word == "=")
 					{
-						_activeNode = tmpNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
-						_lastAddedNode = _activeNode;
+						_activeNode = _activeNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
 						varAdded = true;
 					}
 					else
 					{
-						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret)
+						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret && allowWrappers)
 						{
 							_addNode(Node::Type::OperationObject, { "W" }, true);
 							wrapperCreated = true;
@@ -712,21 +714,17 @@ namespace cJass
 					break;
 
 				case word_t::constant:
-					if (localVarDeclaration)
-						_addNode(Node::Type::OperationObject, { "C", _word }, true);
-					else
+					if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret && allowWrappers)
 					{
-						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret)
-						{
-							_addNode(Node::Type::OperationObject, { "W" }, true);
-							wrapperCreated = true;
-						}
-						_addNode(Node::Type::OperationObject, { "C", _word });
+						_addNode(Node::Type::OperationObject, { "W" }, true);
+						wrapperCreated = true;
 					}
+					_addNode(Node::Type::OperationObject, { "C", _word });
 					break;
 
 				case word_t::expOpen:
-					if (wtype_prev == word_t::id)
+					if (_lastAddedNode->GetType() == Node::Type::OperationObject
+						&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
 					{
 						_lastAddedNode->InitData({ "c", prevWord });
 						_activeNode = _lastAddedNode;
@@ -756,19 +754,20 @@ namespace cJass
 					break;
 
 				case word_t::indexOpen:
-					if (localVarDeclaration)
+					if (isLocalTop)
 						writingArrDecl = true;
+					else if (_lastAddedNode->GetType() == Node::Type::OperationObject
+						&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
+					{
+						tmpNode = Node::Produce(Node::Type::OperationObject, _lastAddedNode);
+						tmpNode->InitData({ "n" });
+						_lastAddedNode->AddSubnode(tmpNode);
+						arrNodeStackActive.push(_activeNode);
+						arrNodeStackLast.push(_lastAddedNode);
+						_activeNode = tmpNode->Ptr();
+					}
 					else
-						if (_lastAddedNode->GetType() == Node::Type::OperationObject
-							&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
-						{
-							tmpNode = Node::Produce(Node::Type::OperationObject, _lastAddedNode);
-							tmpNode->InitData({ "n" });
-							_lastAddedNode->AddSubnode(tmpNode);
-							arrNodeStackActive.push(_activeNode);
-							arrNodeStackLast.push(_lastAddedNode);
-							_activeNode = tmpNode->Ptr();
-						}
+						appLog(Warning) << "Wrong usage of array brackets. Must be after identifier!";
 					break;
 
 				case word_t::indexClose:
@@ -795,13 +794,19 @@ namespace cJass
 					break;
 
 				case word_t::next:
-					if (localVarDeclaration)
+					if (isLocalTop || isVarExprTop)
 					{
-						_activeNode = tmpNode->Ptr();
+						if (isVarExprTop)
+							_pop();
+
 						if (!varAdded)
-							tmpNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
+						{
+							_activeNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
+						}
 						else
+						{
 							varAdded = false;
+						}
 						varName = "";
 						varArrSize = "";
 					}
@@ -827,24 +832,27 @@ namespace cJass
 					break;
 
 				case word_t::end:
-					if (localVarDeclaration)
+					if (isVarExprTop)
+						_pop();
+
+					if (isLocalTop)
 					{
-						localVarDeclaration = false;
-						_activeNode = prevActive;
 						if (!varAdded)
-							tmpNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
+						{
+							_activeNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
+						}
 						else
+						{
 							varAdded = false;
-						_addNode(tmpNode);
+						}
+						allowWrappers = true;
 						varName = "";
 						varArrSize = "";
 					}
-					else
-					{
-						if (wrapperCreated)
-							wrapperCreated = false;
-						_pop();
-					}
+
+					if (wrapperCreated)
+						wrapperCreated = false;
+					_pop();
 					break;
 
 				case word_t::blocklEnd:
@@ -865,8 +873,8 @@ namespace cJass
 			_word = "";
 		};
 
-		appLog(Debug) << "Starting parse of \"" << _fileName << "\"";
-		appLog(Debug) << "Parsing line" << long(1);
+		appLog(Info) << "Starting parse of \"" << _fileName << "\"";
+		appLog(Debug) << "Parsing line" << 1;
 		try
 		{
 			for (size_t i = 0; i < len; i++)

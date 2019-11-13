@@ -46,8 +46,7 @@ namespace cJass
 	public:
 		static NodePtr Produce(Node::Type type, Node* top
 			, OutputInterface::Type outputType = OutputInterface::Type::None
-			, OutputInterface::NewLineType nlType = OutputInterface::NewLineType::LF
-			, void* outputPtr = nullptr);
+			, OutputInterface::NewLineType nlType = OutputInterface::NewLineType::LF);
 
 		Node(Type type = Type::Undefined, Node* top = nullptr);
 		virtual ~Node();
@@ -74,7 +73,7 @@ namespace cJass
 		std::vector<variable_t> _globals;
 
 	public:
-		GlobalSpace(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, void* outputPtr);
+		GlobalSpace(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
@@ -112,6 +111,7 @@ namespace cJass
 			Constant,
 			Argument,
 			Expression,
+			VarInitExpression,
 			Call,
 			If,
 			Return,
