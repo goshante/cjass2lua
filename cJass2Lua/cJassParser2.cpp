@@ -12,6 +12,13 @@ void stack_incr_top(std::stack<int>& st)
 	st.push(i);
 }
 
+void bstack_set_top(std::stack<bool>& st, bool b)
+{
+	st.pop();
+	st.push(b);
+}
+
+
 namespace cJass
 {
 	enum class ctype_t
@@ -59,7 +66,8 @@ namespace cJass
 		next,
 		loop,
 		end,
-		blocklEnd
+		blockBegin,
+		blockEnd
 	};
 
 	word_t classifyWord(const std::string& word)
@@ -235,8 +243,11 @@ namespace cJass
 			return word_t::constant;
 		}
 
+		if (word == "{")
+			return word_t::blockBegin;
+
 		if (word == "}")
-			return word_t::blocklEnd;
+			return word_t::blockEnd;
 
 		if (word == ",")
 			return word_t::next;
@@ -409,6 +420,9 @@ namespace cJass
 			static std::stack<cJass::Node*> arrNodeStackActive;
 			static std::stack<cJass::Node*> callNodeStackLast;
 			static std::stack<int>			argCount;
+			static std::stack<bool>			wrapperStateStack;
+			static std::stack<bool>			allowWrappersStack;
+			static std::stack<bool>			varAddedStack;
 
 			auto pops = [this, &subjectStack]() -> void
 			{
@@ -431,13 +445,15 @@ namespace cJass
 					wtype = word_t::expClose;
 					break;
 
-				/*case ctype_t::bBeg:
-					_word = "{";
-					break;*/
+				case ctype_t::bBeg:
+					if (_activeNode->GetDepth() == 0)
+						return;
+					wtype = word_t::blockBegin;
+					break;
 
 				case ctype_t::bEnd:
 					_word = "}";
-					wtype = word_t::blocklEnd;
+					wtype = word_t::blockEnd;
 					break;
 
 				case ctype_t::iBeg:
@@ -550,7 +566,7 @@ namespace cJass
 				}
 				else if (subjectStack.top() == ParseTag2_t::defs)
 				{
-					if (_word == "enddefine")
+					if (_word == "enddefine" || _word == "}")
 					{
 						appLog(Debug) << "End parsing defines";
 						subjectStack.pop();
@@ -578,6 +594,9 @@ namespace cJass
 						appLog(Debug) << "Parsing function" << vec_arg[1];
 						_addNode(Node::Type::Function, vec_arg, true);
 						subjectStack.pop();
+						wrapperStateStack.push(false);
+						allowWrappersStack.push(true);
+						varAddedStack.push(false);
 						vec_arg.clear();
 						goto parseWordEnd;
 					}
@@ -618,13 +637,11 @@ namespace cJass
 
 				static std::string varName;
 				static std::string varArrSize;
-				static bool varAdded = false;
 				static bool writingArrDecl = false;
-				static bool wrapperCreated = false;
-				static bool allowWrappers = true;
 				bool isLocalTop = _activeNode->GetType() == Node::Type::LocalDeclaration;
 				bool isVarExprTop = (_activeNode->GetType() == Node::Type::OperationObject
 					&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::VarInitExpression);
+				static bool lambda = false;
 
 				if (_word == "flag")
 					_word = _word;
@@ -661,16 +678,16 @@ namespace cJass
 					break;
 
 				case word_t::id:
-					if (isLocalTop && !varAdded)
+					if (isLocalTop && !varAddedStack.top())
 					{
 						varName = _word;
 					}
 					else
 					{
-						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret && allowWrappers)
+						if (!wrapperStateStack.top() && subjectStack.top() != ParseTag2_t::ret && allowWrappersStack.top())
 						{
 							_addNode(Node::Type::OperationObject, { "W" }, true);
-							wrapperCreated = true;
+							bstack_set_top(wrapperStateStack, true);
 						}
 
 						_addNode(Node::Type::OperationObject, { "I", _word });
@@ -684,28 +701,41 @@ namespace cJass
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Expression
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::VarInitExpression
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Index
-							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return))
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return) && !lambda)
 					{
 						appLog(Warning) << "Unexpected typename" << _word << DOC_LINEPOS;
 						goto parseWordEnd;
 					}
-					_addNode(Node::Type::LocalDeclaration, { _word }, true);
-					varAdded = false;
-					allowWrappers = false;
+
+					if (_activeNode->GetType() == Node::Type::OperationObject && lambda)
+					{
+						if (_activeNode->Ptr<OperationObject>()->GetOpType() != OperationObject::OpType::Lambda)
+							_addNode(Node::Type::OperationObject, { "l", _word }, true);
+						else
+							appLog(Warning) << "Lambda typename again twice";
+					}
+					else if (lambda)
+						_addNode(Node::Type::OperationObject, { "l", _word }, true);
+					else
+					{
+						_addNode(Node::Type::LocalDeclaration, { _word }, true);
+						bstack_set_top(varAddedStack, false);
+						bstack_set_top(allowWrappersStack, false);
+					}
 					break;
 
 				case word_t::op:
 					if (isLocalTop && _word == "=")
 					{
 						_activeNode = _activeNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
-						varAdded = true;
+						bstack_set_top(varAddedStack, true);
 					}
 					else
 					{
-						if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret && allowWrappers)
+						if (!wrapperStateStack.top() && subjectStack.top() != ParseTag2_t::ret && allowWrappersStack.top())
 						{
 							_addNode(Node::Type::OperationObject, { "W" }, true);
-							wrapperCreated = true;
+							bstack_set_top(wrapperStateStack, true);
 						}
 
 						std::string oper = _word;
@@ -732,15 +762,18 @@ namespace cJass
 					break;
 
 				case word_t::constant:
-					if (!wrapperCreated && subjectStack.top() != ParseTag2_t::ret && allowWrappers)
+					if (!wrapperStateStack.top() && subjectStack.top() != ParseTag2_t::ret && allowWrappersStack.top())
 					{
 						_addNode(Node::Type::OperationObject, { "W" }, true);
-						wrapperCreated = true;
+						bstack_set_top(wrapperStateStack, true);
 					}
 					_addNode(Node::Type::OperationObject, { "C", _word });
 					break;
 
 				case word_t::expOpen:
+					if (lambda)
+						goto parseWordEnd;
+
 					if (_lastAddedNode->GetType() == Node::Type::OperationObject
 						&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
 					{
@@ -754,6 +787,9 @@ namespace cJass
 					break;
 
 				case word_t::expClose:
+					if (lambda)
+						goto parseWordEnd;
+
 					if (_activeNode->GetType() == Node::Type::OperationObject
 						&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Call
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Argument))
@@ -819,6 +855,7 @@ namespace cJass
 					break;
 
 				case word_t::lambda:
+					lambda = true;
 					break;
 
 				case word_t::comment:
@@ -834,13 +871,13 @@ namespace cJass
 							isLocalTop = true;
 						}
 
-						if (!varAdded)
+						if (!varAddedStack.top())
 						{
 							_activeNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
 						}
 						else
 						{
-							varAdded = false;
+							bstack_set_top(varAddedStack, false);
 						}
 						varName = "";
 						varArrSize = "";
@@ -883,26 +920,42 @@ namespace cJass
 						
 					if (isLocalTop)
 					{
-						if (!varAdded)
+						if (!varAddedStack.top())
 						{
 							_activeNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
 						}
 						else
 						{
-							varAdded = false;
+							bstack_set_top(varAddedStack, false);
 						}
 						varName = "";
 						varArrSize = "";
-						allowWrappers = true;
+						bstack_set_top(allowWrappersStack, true);
 					}
 					
-					if (wrapperCreated)
-						wrapperCreated = false;
+					if (wrapperStateStack.top())
+						bstack_set_top(wrapperStateStack, false);
 					_pop();
 					break;
 
-				case word_t::blocklEnd:
+				case word_t::blockBegin:
+					wrapperStateStack.push(false);
+					allowWrappersStack.push(true);
+					varAddedStack.push(false);
+
+					if (lambda)
+					{
+						lambda = false;
+						break;
+					}
+						
+					break;
+
+				case word_t::blockEnd:
 					_pop();
+					wrapperStateStack.pop();
+					allowWrappersStack.pop();
+					varAddedStack.pop();
 					if (_activeNode->GetDepth() == 0)
 						appLog(Debug) << "End parsing function";
 					break;

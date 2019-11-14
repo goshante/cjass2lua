@@ -127,7 +127,7 @@ namespace _____LOGGER
 		_logger->_doNotAppendSpaces = true;
 		_logger->_toOutput("{ ");
 		for (size_t i = 0; i < strings.size(); i++)
-		{
+		{	
 			_logger->_toOutput("\"" + strings[i] + "\"");
 			if (i != strings.size() - 1)
 				_logger->_toOutput(", ");

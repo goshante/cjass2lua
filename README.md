@@ -12,6 +12,9 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 
 ### Unsupported features
 - Analyzing classes/structures and converting them to meta tables
+- JASS/vJASS Syntax
+- Pre-processor directives
+- Macroses. Only constants, function and variable shorters. Macroses are translated into global variables.
 
 ### Manual
 *In development...*
@@ -20,7 +23,8 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 *In development...*
 
 ### ToDo
-- Lambda expressions
+- Lambda expressions (DONE)
+- Fix new lines and tabs
 - if/elseif/else
 - Loop while
 - Console interface

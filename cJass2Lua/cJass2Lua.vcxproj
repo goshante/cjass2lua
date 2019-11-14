@@ -118,7 +118,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="cJassNodes.h" />
-    <ClInclude Include="cJassParser.h" />
     <ClInclude Include="cJassParser2.h" />
     <ClInclude Include="defs.h" />
     <ClInclude Include="Logger.h" />
@@ -128,7 +127,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cJassNodes.cpp" />
-    <ClCompile Include="cJassParser.cpp" />
     <ClCompile Include="cJassParser2.cpp" />
     <ClCompile Include="Logger.cpp" />
     <ClCompile Include="main.cpp" />
