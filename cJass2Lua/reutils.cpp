@@ -335,7 +335,7 @@ namespace reu
 		}
 	}
 
-	void matches_t::ExcludeIndexRanges(cJass::ranges_t& ranges)
+	void matches_t::ExcludeIndexRanges(ranges_t& ranges)
 	{
 		for (auto& r : ranges)
 		{

@@ -57,6 +57,7 @@ namespace _____LOGGER
 
 	protected:
 		Level			_level;
+		Level			_minLevel;
 		std::string		_file;
 		int				_line;
 		std::string		_func;
@@ -75,13 +76,18 @@ namespace _____LOGGER
 	public:
 		Logger(OutputInterface::Type outType, std::string fileName);
 		~Logger();
+
+		void level(Level lvl);
 	};
-}
 
 #ifdef _LOGGER_MAIN_CPP
-_____LOGGER::Logger ___Logger(OutputInterface::Type::File, "cjass2lua.log");
+	Logger ___Logger(OutputInterface::Type::File, "cjass2lua.log");
 #else
-extern _____LOGGER::Logger ___Logger;
+	extern Logger ___Logger;
 #endif
+}
 
-#define appLog(lvl) _____LOGGER::Logger::Writer(__FILE__, __FUNCTION__, __LINE__, _____LOGGER::Logger::Level::lvl, ___Logger)
+
+
+#define APP_LOG_LEVEL(lvl) _____LOGGER::___Logger.level(_____LOGGER::Logger::Level::lvl)
+#define appLog(lvl) _____LOGGER::Logger::Writer(__FILE__, __FUNCTION__, __LINE__, _____LOGGER::Logger::Level::lvl, _____LOGGER::___Logger)

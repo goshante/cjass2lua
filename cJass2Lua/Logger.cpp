@@ -31,6 +31,7 @@ namespace _____LOGGER
 			, fileName
 		)
 		, _level(Level::Info)
+		, _minLevel(Level::Debug)
 		, _file("None")
 		, _line(0)
 		, _func("?")
@@ -79,11 +80,19 @@ namespace _____LOGGER
 	{
 		if (_buffer != "")
 		{
-			std::ostringstream ss;
-			ss << _generateTimeStamp() << "[" << _file << ":" << _line << " (" << _func << ")] [" << _levelToString() << "]:\t" << _buffer << _nl;
-			OutputInterface::_toOutput(ss.str());
+			if (_level >= _minLevel)
+			{
+				std::ostringstream ss;
+				ss << _generateTimeStamp() << "[" << _file << ":" << _line << " (" << _func << ")] [" << _levelToString() << "]:\t" << _buffer << _nl;
+				OutputInterface::_toOutput(ss.str());
+			}
 			_buffer = "";
 		}
+	}
+
+	void Logger::level(Level lvl)
+	{
+		_minLevel = lvl;
 	}
 
 	/****************

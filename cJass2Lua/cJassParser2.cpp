@@ -21,56 +21,6 @@ void bstack_set_top(std::stack<bool>& st, bool b)
 
 namespace cJass
 {
-	enum class ctype_t
-	{
-		undefined,
-		unk,	//Other
-		emp,	//Empty - space or tab
-		nl,		//Newline - \n
-		nlr,	//Newline - \r
-		lit,	//Literal
-		dig,	//Digit
-		oper,	//Operator
-		dot,	//Dot
-		com,	//Comma
-		str,	//String "
-		raw,	//Rawcode '
-		bBeg,	//Block begin {
-		bEnd,	//Block end }
-		aBeg,	//Args begin (
-		aEnd,	//Args end )
-		iBeg,	//Index begin [
-		iEnd,	//Index end ]
-		opEnd	// ;
-	};
-
-	enum class word_t
-	{
-		undefined,
-		nl,
-		id,
-		type,
-		retn,
-		lambda,
-		op,
-		unary,
-		unaryExpr,
-		constant,
-		expOpen,
-		expClose,
-		indexOpen,
-		indexClose,
-		If,
-		Else,
-		elseif,
-		comment,
-		next,
-		loop,
-		end,
-		blockBegin,
-		blockEnd
-	};
-
 	word_t classifyWord(const std::string& word)
 	{
 		if (word == "" || word == " " || word == "	")
@@ -277,11 +227,13 @@ namespace cJass
 		if (word == "while")
 			return word_t::loop;
 
-		if (word != "local"
-			&& word != "call"
-			&& word != "set"
-			&& word != "function"
-			&& reu::IsMatching(word, "^[a-zA-Z_]{1,1}[0-9a-zA-Z_]*$"))
+		if (word == "local"
+			|| word == "call"
+			|| word == "set"
+			|| word == "function")
+			return word_t::ignore;
+
+		if (reu::IsMatching(word, "^[a-zA-Z_]{1,1}[0-9a-zA-Z_]*$"))
 			return word_t::id;
 
 		return word_t::undefined;
@@ -407,8 +359,8 @@ namespace cJass
 
 		int parseSteps = 0;
 
-		std::stack<ParseTag2_t> subjectStack;
-		subjectStack.push(ParseTag2_t::none);
+		std::stack<ParseSpecialSubject> subjectStack;
+		subjectStack.push(ParseSpecialSubject::none);
 		auto parseWord = [this, &prevWord, &parseSteps, &vec_arg, ctPrev, &isString, &isLineComment,
 			&isMultilineComment, &isRawCode, &subjectStack](ctype_t explicitParse = ctype_t::undefined) -> void
 		{
@@ -536,7 +488,11 @@ namespace cJass
 					goto parseWordEnd;
 				}
 				else
-					wtype = word_t::comment;
+				{
+					if (!(isLineComment && wtype == word_t::nl))
+						wtype = word_t::comment;
+				}
+					
 			}
 
 			if (_depth() == 0)
@@ -547,7 +503,7 @@ namespace cJass
 				if (_word == ",")
 					goto parseWordEnd;
 
-				if (subjectStack.top() == ParseTag2_t::globals)
+				if (subjectStack.top() == ParseSpecialSubject::globals)
 				{
 					if (_word == "endglobals")
 					{
@@ -583,7 +539,7 @@ namespace cJass
 						vec_arg.push_back(_word);
 
 				}
-				else if (subjectStack.top() == ParseTag2_t::defs)
+				else if (subjectStack.top() == ParseSpecialSubject::defs)
 				{
 					if (_word == "enddefine" || _word == "}")
 					{
@@ -605,7 +561,7 @@ namespace cJass
 						goto parseWordEnd;
 					}
 				}
-				else if (subjectStack.top() == ParseTag2_t::func)
+				else if (subjectStack.top() == ParseSpecialSubject::func)
 				{
 				_func:
 					if (_word == ")")
@@ -624,29 +580,29 @@ namespace cJass
 					if (_word != "")
 						vec_arg.push_back(_word);
 				}
-				else if (subjectStack.top() == ParseTag2_t::none)
+				else if (subjectStack.top() == ParseSpecialSubject::none)
 				{
 					if (_word == "globals")
 					{
 						appLog(Debug) << "Parsing globals";
-						subjectStack.push(ParseTag2_t::globals);
+						subjectStack.push(ParseSpecialSubject::globals);
 					}
 					else if (_word == "define")
 					{
 						appLog(Debug) << "Parsing defines";
-						subjectStack.push(ParseTag2_t::defs);
+						subjectStack.push(ParseSpecialSubject::defs);
 					}
 					else if (_word != ";")
 					{
 						vec_arg.clear();
-						subjectStack.push(ParseTag2_t::func);
+						subjectStack.push(ParseSpecialSubject::func);
 						goto _func;
 					}
 				}
 			}
 			else
 			{
-				if (subjectStack.top() == ParseTag2_t::ret)
+				if (subjectStack.top() == ParseSpecialSubject::ret)
 				{
 					if (_word == ";")
 					{
@@ -666,7 +622,7 @@ namespace cJass
 				if (_word == "flag")
 					_word = _word;
 
-				if (subjectStack.top() == ParseTag2_t::call && argCount.top() == 0 && wtype != word_t::expClose)
+				if (subjectStack.top() == ParseSpecialSubject::call && argCount.top() == 0 && wtype != word_t::expClose)
 				{
 					callNodeStackLast.push(_lastAddedNode);
 					tmpNode = Node::Produce(Node::Type::OperationObject, _activeNode);
@@ -693,7 +649,7 @@ namespace cJass
 				switch (wtype)
 				{
 				case word_t::retn:
-					subjectStack.push(ParseTag2_t::ret);
+					subjectStack.push(ParseSpecialSubject::ret);
 					_addNode(Node::Type::OperationObject, { "r" }, true);
 					bstack_set_top(unclosedOpStack, true);
 					break;
@@ -705,7 +661,7 @@ namespace cJass
 					}
 					else
 					{
-						if (!wrapperStateStack.top() && subjectStack.top() != ParseTag2_t::ret && allowWrappersStack.top())
+						if (!wrapperStateStack.top() && subjectStack.top() != ParseSpecialSubject::ret && allowWrappersStack.top())
 						{
 							_addNode(Node::Type::OperationObject, { "W" }, true);
 							bstack_set_top(wrapperStateStack, true);
@@ -763,7 +719,7 @@ namespace cJass
 					}
 					else
 					{
-						if (!wrapperStateStack.top() && subjectStack.top() != ParseTag2_t::ret && allowWrappersStack.top())
+						if (!wrapperStateStack.top() && subjectStack.top() != ParseSpecialSubject::ret && allowWrappersStack.top())
 						{
 							_addNode(Node::Type::OperationObject, { "W" }, true);
 							bstack_set_top(wrapperStateStack, true);
@@ -794,7 +750,7 @@ namespace cJass
 					break;
 
 				case word_t::constant:
-					if (!wrapperStateStack.top() && subjectStack.top() != ParseTag2_t::ret && allowWrappersStack.top())
+					if (!wrapperStateStack.top() && subjectStack.top() != ParseSpecialSubject::ret && allowWrappersStack.top())
 					{
 						_addNode(Node::Type::OperationObject, { "W" }, true);
 						bstack_set_top(wrapperStateStack, true);
@@ -812,7 +768,7 @@ namespace cJass
 					{
 						_lastAddedNode->InitData({ "c", prevWord });
 						_activeNode = _lastAddedNode;
-						subjectStack.push(ParseTag2_t::call);
+						subjectStack.push(ParseSpecialSubject::call);
 						argCount.push(0);
 					}
 					else
@@ -940,6 +896,17 @@ namespace cJass
 					
 				case word_t::nl:
 					if (_strictMode)
+					{
+						if (_activeNode->IsBlock())
+						{
+							if (wtype_prev == word_t::nl)
+								_addNode(Node::Type::OperationObject, { "N" });
+						}
+						else
+							_addNode(Node::Type::OperationObject, { "N" });
+					}
+
+					if (_strictMode)
 						break;
 
 					if ((isLocalTop || isVarExprTop)
@@ -978,7 +945,22 @@ namespace cJass
 							bstack_set_top(wrapperStateStack, false);
 						bstack_set_top(unclosedOpStack, false);
 						_pop();
+
+						if (_activeNode->IsBlock())
+						{
+							if (wtype_prev == word_t::nl)
+								_addNode(Node::Type::OperationObject, { "N" });
+						}
+						else
+							_addNode(Node::Type::OperationObject, { "N" });
 					}
+					else if (_activeNode->IsBlock())
+					{
+						if (wtype_prev == word_t::nl)
+							_addNode(Node::Type::OperationObject, { "N" });
+					}
+					else
+						_addNode(Node::Type::OperationObject, { "N" });
 					break;
 
 				case word_t::end:
@@ -1047,6 +1029,9 @@ namespace cJass
 					unclosedOpStack.pop();
 					if (_activeNode->GetDepth() == 0)
 						appLog(Debug) << "End parsing function";
+					break;
+
+				case word_t::ignore:
 					break;
 
 				case word_t::undefined:
@@ -1142,6 +1127,7 @@ namespace cJass
 				else if (isLineComment && (c == '\r' || c == '\n'))
 				{
 					parseWord();
+					parseWord(ct);
 					isLineComment = false;
 					ctPrev = ct;
 					continue;
@@ -1199,6 +1185,9 @@ namespace cJass
 					break;
 
 				case ctype_t::nlr:
+					//Ignore '\r'
+					break;
+
 				case ctype_t::unk:
 				case ctype_t::emp:
 					parseWord();

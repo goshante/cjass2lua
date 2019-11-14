@@ -34,6 +34,7 @@ namespace cJass
 		OutputInterface		_out;
 		NodeList			_subnodes;
 		int					_depthIndex;
+		bool				_isBlock;
 
 	private:
 		Type				_type;
@@ -60,6 +61,7 @@ namespace cJass
 		Node* LastSubnode();
 		void PrintTabs(int substract = 0);
 		size_t GetDepth() const;
+		bool IsBlock() const;
 
 		NodePtr IterateSubnodes();
 		NodePtr AtNode(size_t i);
@@ -125,7 +127,8 @@ namespace cJass
 			UnaryOperator,
 			Id,
 			Wrapper,
-			Index
+			Index,
+			NewLine
 		};
 
 	private:

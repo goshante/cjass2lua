@@ -124,6 +124,7 @@ namespace cJass
 		, _isNewLine(false)
 		, _tabs(0)
 		, _depthIndex(0)
+		, _isBlock(false)
 	{
 		if (top != nullptr)
 		{
@@ -213,6 +214,11 @@ namespace cJass
 	size_t Node::GetDepth() const
 	{
 		return _depthIndex;
+	}
+
+	bool Node::IsBlock() const
+	{
+		return _isBlock;
 	}
 
 	GlobalSpace::GlobalSpace(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString)
@@ -307,7 +313,7 @@ namespace cJass
 		if (multiline)
 			_out << "--[[" << OutputInterface::nl << tmp << OutputInterface::nl << "]]--" << OutputInterface::nl;
 		else
-			_out << "--" << tmp;
+			_out << "-- " << tmp;
 	}
 
 	void Comment::InitData(const std::vector<std::string>& strings)
@@ -340,6 +346,7 @@ namespace cJass
 		, _returnType("")
 		, _args({})
 	{
+		_isBlock = true;
 	}
 
 	void Function::ToLua()
@@ -546,6 +553,11 @@ namespace cJass
 			PrintTabs(1);
 			_out << "end";
 			break;
+
+		case OpType::NewLine:
+			_out << OutputInterface::nl;
+			PrintTabs();
+			break;
 		
 		default:
 			appLog(Warning) << "OperationObject::ToLua: Unsupported OpType.";
@@ -605,21 +617,25 @@ namespace cJass
 		case 'i':
 			_otype = OpType::If;
 			_depthIndex++;
+			_isBlock = true;
 			break;
 
 		case 'E':
 			_otype = OpType::Elseif;
 			_depthIndex++;
+			_isBlock = true;
 			break;
 
 		case 'e':
 			_otype = OpType::Else;
 			_depthIndex++;
+			_isBlock = true;
 			break;
 
 		case 'w':
 			_otype = OpType::While;
 			_depthIndex++;
+			_isBlock = true;
 			break;
 
 		case 'l':
@@ -628,6 +644,7 @@ namespace cJass
 			_otype = OpType::Lambda;
 			_opText = strings[1];
 			_depthIndex++;
+			_isBlock = true;
 			break;
 
 		case 'o':
@@ -649,6 +666,10 @@ namespace cJass
 
 		case 'n':
 			_otype = OpType::Index;
+			break;
+
+		case 'N':
+			_otype = OpType::NewLine;
 			break;
 
 		default:
