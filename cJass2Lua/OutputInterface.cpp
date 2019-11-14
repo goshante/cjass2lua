@@ -2,6 +2,7 @@
 
 #include "OutputInterface.h"
 #include <iostream>
+#include <exception>
 
 OutputInterface::NewLine OutputInterface::nl;
 
@@ -13,25 +14,23 @@ OutputInterface::OutputInterface()
 {
 }
 
-void ofstreamDeleter(std::ofstream* p) 
-{
-	p->close();
-	delete p;
-}
-
 OutputInterface::OutputInterface(Type type, NewLineType nlType, std::string& fileNameOrString)
 	: _type(type)
 	, _file(nullptr)
 	, _strPtr(nullptr)
 {
+	HANDLE hFile = NULL;
 	switch (type)
 	{
 	case Type::String:
 		_strPtr = &fileNameOrString;
 		break;
 	case Type::File:
-		_file = std::shared_ptr<std::ofstream>(new std::ofstream, ofstreamDeleter);
-		_file->open(fileNameOrString, std::ios::out | std::ios_base::trunc | std::ios::binary);
+		hFile = CreateFileA(fileNameOrString.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
+			CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, NULL);
+		if (hFile == 0 || hFile == HANDLE(~0))
+			throw std::runtime_error("OutputInterface::OutputInterface: Cannot open file " + fileNameOrString + " for writing.");
+		_file = std::shared_ptr<WinHandle>(new WinHandle(hFile));
 		break;
 	}
 
@@ -68,6 +67,8 @@ OutputInterface& OutputInterface::operator=(const OutputInterface& copy)
 
 void OutputInterface::_toOutput(const std::string& str)
 {
+	DWORD dw = 0;
+
 	switch (_type)
 	{
 	case Type::None:
@@ -82,8 +83,7 @@ void OutputInterface::_toOutput(const std::string& str)
 		break;
 
 	case Type::File:
-		(*_file) << str;
-		_file->flush();
+		WriteFile(*_file, &str[0], DWORD(str.length()), &dw, NULL);
 		break;
 	}
 }

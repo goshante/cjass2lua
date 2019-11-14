@@ -1,12 +1,25 @@
 #pragma once
 
 #include <string>
-#include <fstream>
 #include <memory>
+
+#include <Windows.h>
 
 class OutputInterface
 {
 public:
+	class WinHandle
+	{
+	private:
+		HANDLE _handle;
+		WinHandle(const WinHandle&) = delete;
+
+	public:
+		WinHandle(HANDLE handle) : _handle(handle) {}
+		~WinHandle() { CloseHandle(_handle); }
+		operator HANDLE() { return _handle;  }
+	};
+
 	enum class Type
 	{
 		None,
@@ -27,7 +40,7 @@ public:
 
 protected:
 	Type							_type;
-	std::shared_ptr<std::ofstream>	_file;
+	std::shared_ptr<WinHandle>		_file;
 	std::string*					_strPtr;
 	std::string						_nl;
 
