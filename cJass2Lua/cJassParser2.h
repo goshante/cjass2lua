@@ -20,6 +20,7 @@ namespace cJass
 		size_t					_line;
 		size_t					_wordPos;
 		std::string				_fileName;
+		bool					_strictMode;
 
 		Node* _addNode(cJass::Node::Type type, const std::vector<std::string> data, bool makeActive = false);
 		Node* _addNode(std::shared_ptr<cJass::Node> node, bool makeActive = false);

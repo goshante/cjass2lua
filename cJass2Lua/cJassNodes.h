@@ -134,6 +134,8 @@ namespace cJass
 		OpType			_otype;
 		bool			_inBrackets;
 		bool			_unaryExpr;
+		bool			_lambdaIsSingle;
+		bool			_blockClosed;
 
 	public:
 		OperationObject(Node* top);
@@ -141,6 +143,9 @@ namespace cJass
 		virtual void InitData(const std::vector<std::string>& strings) override;
 		OpType GetOpType() const;
 		bool isEmpty() const;
+		bool LambdaIsSingle() const;
+		bool BlockClosed() const;
+		void CloseBlock();
 	};
 
 	class LocalDeclaration : public Node
