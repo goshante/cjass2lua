@@ -1191,6 +1191,8 @@ namespace cJass
 				case ctype_t::unk:
 				case ctype_t::emp:
 					parseWord();
+					if (isMultilineComment || isLineComment)
+						_word.push_back(c);
 					break;
 
 				case ctype_t::nl:
