@@ -277,13 +277,37 @@ namespace cJass
 	void Comment::ToLua()
 	{
 		size_t end = _comment.length() - 1;
-		bool multiline = (_comment.find("\r") != std::string::npos || _comment.find("\n") != std::string::npos);
+		bool multiline = false;
+		size_t n, r;
+		std::string tmp = _comment;
+		if (_comment.length() >= 2)
+		{
+			tmp = reu::IndexSubstr(_comment, 1, end);
+			r = tmp.find("\r");
+			n = tmp.find("\n");
+			multiline = ((r != std::string::npos) || (n != std::string::npos));
+		}
+		n = _comment.find("\n");
+		if (n == 0 && end == 0)
+			return;
 
-		PrintTabs();
-		if (multiline)
-			 _out << "--[[" << _comment << "]]--" << OutputInterface::nl;
+
+		if (n == 0)
+		{
+			_out << OutputInterface::nl;
+			if (Top()->GetType() != Node::Type::GlobalSpace)
+				PrintTabs();
+		}
 		else
-			_out << "--" << _comment << OutputInterface::nl;	
+		{
+			tmp = _comment;
+			_out << "\t";
+		}
+		
+		if (multiline)
+			_out << "--[[" << OutputInterface::nl << tmp << OutputInterface::nl << "]]--" << OutputInterface::nl;
+		else
+			_out << "--" << tmp;
 	}
 
 	void Comment::InitData(const std::vector<std::string>& strings)
@@ -323,9 +347,9 @@ namespace cJass
 		_out << OutputInterface::nl << "function " << _name << "(";
 		
 		if (_args.size() == 0)
-			_out << ")" << OutputInterface::nl;
+			_out << ")";
 		else if (_args.size() == 2)
-			_out << _args[1] << ")" << OutputInterface::nl;
+			_out << _args[1] << ")";
 		else
 		{
 			for (size_t i = 1; i < _args.size(); i++)
@@ -336,7 +360,7 @@ namespace cJass
 					if (i != _args.size() - 1)
 						_out << ", ";
 					else
-						_out << ")" << OutputInterface::nl;
+						_out << ")";
 				}
 			}
 		}
@@ -399,6 +423,8 @@ namespace cJass
 		, _otype(OpType::Unknown)
 		, _inBrackets(false)
 		, _unaryExpr(false)
+		, _lambdaIsSingle(false)
+		, _blockClosed(false)
 	{
 	}
 
@@ -514,20 +540,7 @@ namespace cJass
 			_out << "function ()";
 			
 			for (auto& node : _subnodes)
-			{
-				if (!begin)
-				{
-					if (node->GetType() == Node::Type::OperationObject)
-					{
-						if (node->Ptr<OperationObject>()->GetOpType() != OperationObject::OpType::Wrapper)
-							_out << OutputInterface::nl;
-					}
-					else
-						_out << OutputInterface::nl;
-					begin = true;
-				}
 				node->ToLua();
-			}
 				
 			_out << OutputInterface::nl;
 			PrintTabs(1);
@@ -610,6 +623,8 @@ namespace cJass
 			break;
 
 		case 'l':
+			if (s[1] == 's')
+				_lambdaIsSingle = true;
 			_otype = OpType::Lambda;
 			_opText = strings[1];
 			_depthIndex++;
@@ -652,6 +667,21 @@ namespace cJass
 		return (_opText == "");
 	}
 
+	bool OperationObject::LambdaIsSingle() const
+	{
+		return _lambdaIsSingle;
+	}
+
+	bool OperationObject::BlockClosed() const
+	{
+		return _blockClosed;
+	}
+
+	void OperationObject::CloseBlock()
+	{
+		_blockClosed = true;
+	}
+
 	LocalDeclaration::LocalDeclaration(Node* top)
 		: Node(Node::Type::LocalDeclaration, top)
 		, _type("")
@@ -690,10 +720,7 @@ namespace cJass
 					else if (expr->CountSubnodes() > 0)
 						expr->ToLua();
 				}
-				_out << OutputInterface::nl;
 			}
-			else
-				_out << OutputInterface::nl;
 		}
 	}
 
