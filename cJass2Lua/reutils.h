@@ -9,6 +9,9 @@ namespace reu
 	void ReplaceStrIndexRange(std::string& str, const std::string& replacingStr, size_t begin, size_t end);
 	std::string IndexSubstr(const std::string& str, size_t begin, size_t end);
 
+	using pair_t = std::pair<size_t, size_t>;
+	using ranges_t = std::vector<pair_t>;
+
 	class match_t
 	{
 	public:
@@ -83,7 +86,7 @@ namespace reu
 		void ReplaceAll(const std::string& pattern);
 		void ExcludeIndexRange(match_t::range_t range);
 		void ExcludeIndexRanges(std::vector<match_t::range_t>& ranges);
-		void ExcludeIndexRanges(cJass::ranges_t& ranges);
+		void ExcludeIndexRanges(ranges_t& ranges);
 
 		std::vector<match_t>::iterator begin();
 		std::vector<match_t>::iterator end();

@@ -1,9 +1,11 @@
 #pragma once
+
+#include "defs.h"
+#include "cJassNodes.h"
+
 #include <string>
 #include <vector>
 #include <set>
-#include "cJassNodes.h"
-#include "defs.h"
 #include <stack>
 
 namespace cJass

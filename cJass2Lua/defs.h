@@ -14,52 +14,71 @@
 
 namespace cJass
 {
-	using csref_t = const std::string&;
-	using pair_t = std::pair<size_t, size_t>;
-	using ranges_t = std::vector<pair_t>;
-
-	struct line_t
-	{
-		std::string line;
-		size_t begin;
-		size_t end;
-	};
+	using csref_t = const ::std::string&;
 
 	class Node;
-	using NodePtr = std::shared_ptr<Node>;
-	using NodeList = std::list<NodePtr>;
+	using NodePtr = ::std::shared_ptr<Node>;
+	using NodeList = ::std::list<NodePtr>;
 	using NL_iter = NodeList::iterator;
 
-	enum class ParseTag_t
+	enum class ctype_t
 	{
-		none,
-		end,
-		ignore,
-		globals,
-		defs,
-		func,
-		lambda,
-		operation,
-		statement,
-		loop
+		undefined,
+		unk,	//Other
+		emp,	//Empty - space or tab
+		nl,		//Newline - \n
+		nlr,	//Newline - \r
+		lit,	//Literal
+		dig,	//Digit
+		oper,	//Operator
+		dot,	//Dot
+		com,	//Comma
+		str,	//String "
+		raw,	//Rawcode '
+		bBeg,	//Block begin {
+		bEnd,	//Block end }
+		aBeg,	//Args begin (
+		aEnd,	//Args end )
+		iBeg,	//Index begin [
+		iEnd,	//Index end ]
+		opEnd	// ;
 	};
 
-	enum class ParseTag2_t
+	enum class word_t
+	{
+		undefined,
+		nl,
+		id,
+		type,
+		retn,
+		lambda,
+		op,
+		unary,
+		unaryExpr,
+		constant,
+		expOpen,
+		expClose,
+		indexOpen,
+		indexClose,
+		If,
+		Else,
+		elseif,
+		comment,
+		next,
+		loop,
+		end,
+		blockBegin,
+		blockEnd,
+		ignore
+	};
+
+	enum class ParseSpecialSubject
 	{
 		none,
 		globals,
 		defs,
 		func,
-		lambda,
 		ret,
 		call
 	};
-
-	struct ParseResult_t
-	{
-		ParseTag_t tag;
-		size_t parseEnd;
-	};
-
-	using tagstack_t = std::stack<ParseTag_t>;
 }

@@ -17,6 +17,7 @@ std::string FileToString(std::string path)
 
 int main()
 {
+	APP_LOG_LEVEL(Info);
 	appLog(Info) << "Starting cJass2Lua application";
 
 	std::string	inputFile		 =	"D:\\test\\test2.j";
