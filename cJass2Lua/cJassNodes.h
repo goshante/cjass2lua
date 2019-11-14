@@ -33,7 +33,7 @@ namespace cJass
 		size_t				_tabs;
 		OutputInterface		_out;
 		NodeList			_subnodes;
-		size_t				_depthIndex;
+		int					_depthIndex;
 
 	private:
 		Type				_type;
@@ -58,7 +58,7 @@ namespace cJass
 		size_t CountSubnodes() const;
 		Node* Top();
 		Node* LastSubnode();
-		void PrintTabs();
+		void PrintTabs(int substract = 0);
 		size_t GetDepth() const;
 
 		NodePtr IterateSubnodes();

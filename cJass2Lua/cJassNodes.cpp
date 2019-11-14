@@ -127,7 +127,7 @@ namespace cJass
 	{
 		if (top != nullptr)
 		{
-			_depthIndex = top->_depthIndex + 1;
+			_depthIndex = top->_depthIndex;
 			_out = top->_out;
 		}
 	}
@@ -194,9 +194,9 @@ namespace cJass
 		return nullptr;
 	}
 
-	void Node::PrintTabs()
+	void Node::PrintTabs(int substract)
 	{
-		for (size_t i = 0; i < _depthIndex-1; i++)
+		for (int i = 0; i < _depthIndex - substract; i++)
 			_out << "\t";
 	}
 
@@ -299,10 +299,13 @@ namespace cJass
 		_comment = strings[0];
 		size_t last = _comment.size() - 1;
 		size_t cutLen = 0;
-		if (_comment[last] == '\r' || _comment[last] == '\n')
-			cutLen++;
-		if (last > 0 && _comment[last-1] == '\r' || _comment[last-1] == '\n')
-			cutLen++;
+		if (_comment.length() > 1)
+		{
+			if (_comment[last] == '\r' || _comment[last] == '\n')
+				cutLen++;
+			if (last > 0 && _comment[last - 1] == '\r' || _comment[last - 1] == '\n')
+				cutLen++;
+		}
 		if (cutLen > 0)
 			_comment = reu::IndexSubstr(_comment, 0, last - cutLen);
 	}
@@ -356,6 +359,7 @@ namespace cJass
 
 		_returnType = strings[0];
 		_name = strings[1];
+		_depthIndex++;
 
 		for (size_t i = 2; i < size; i++)
 			_args.push_back(strings[i]);
@@ -401,6 +405,7 @@ namespace cJass
 	void OperationObject::ToLua()
 	{
 		size_t nodeCount, lastIndex;
+		bool begin = false;
 		if (_otype != OpType::Unknown)
 		{
 			if (_isNewLine)
@@ -504,6 +509,30 @@ namespace cJass
 				node->ToLua();
 			_out << "]";
 			break;
+
+		case OpType::Lambda:
+			_out << "function ()";
+			
+			for (auto& node : _subnodes)
+			{
+				if (!begin)
+				{
+					if (node->GetType() == Node::Type::OperationObject)
+					{
+						if (node->Ptr<OperationObject>()->GetOpType() != OperationObject::OpType::Wrapper)
+							_out << OutputInterface::nl;
+					}
+					else
+						_out << OutputInterface::nl;
+					begin = true;
+				}
+				node->ToLua();
+			}
+				
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "end";
+			break;
 		
 		default:
 			appLog(Warning) << "OperationObject::ToLua: Unsupported OpType.";
@@ -562,24 +591,28 @@ namespace cJass
 
 		case 'i':
 			_otype = OpType::If;
+			_depthIndex++;
 			break;
 
 		case 'E':
 			_otype = OpType::Elseif;
+			_depthIndex++;
 			break;
 
 		case 'e':
 			_otype = OpType::Else;
+			_depthIndex++;
 			break;
 
 		case 'w':
 			_otype = OpType::While;
-			if (s[1] == 'b')
-				_inBrackets = true;
+			_depthIndex++;
 			break;
 
 		case 'l':
 			_otype = OpType::Lambda;
+			_opText = strings[1];
+			_depthIndex++;
 			break;
 
 		case 'o':
@@ -629,6 +662,7 @@ namespace cJass
 
 	void LocalDeclaration::ToLua()
 	{
+		_out << OutputInterface::nl;
 		PrintTabs();
 		_out << "local ";
 
