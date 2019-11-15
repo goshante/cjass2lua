@@ -35,14 +35,14 @@ void StringToFile(std::string path, std::string str)
 	CloseHandle(hFile);
 }
 
-int main()
+INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
-	APP_LOG_LEVEL(Info);
+	//APP_LOG_LEVEL(Info);
 	appLog(Info) << "Starting cJass2Lua application";
 
-	std::string	inputFile		 =	"D:\\test\\test2.j";
+	std::string	inputFile		 =	"D:\\test\\test3.j";
 	std::string text			 =  FileToString(inputFile);
-	std::string outputFilePath   =  "D:\\test\\output.lua";
+	std::string outputFilePath   =  "D:\\test\\output2.lua";
 	cJass::Parser2 parser(OutputInterface::Type::File, OutputInterface::NewLineType::LF, outputFilePath);
 
 	try
@@ -56,7 +56,5 @@ int main()
 	}
 
 	appLog(Info) << "Exiting";
-
-	system("pause");
 	return 0;
 }

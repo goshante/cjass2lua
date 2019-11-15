@@ -35,6 +35,7 @@ namespace cJass
 		NodeList			_subnodes;
 		int					_depthIndex;
 		bool				_isBlock;
+		bool				_isComplete;
 
 	private:
 		Type				_type;
@@ -62,6 +63,8 @@ namespace cJass
 		void PrintTabs(int substract = 0);
 		size_t GetDepth() const;
 		bool IsBlock() const;
+		bool IsComplete() const;
+		void Complete(bool isComplete);
 
 		NodePtr IterateSubnodes();
 		NodePtr AtNode(size_t i);
@@ -112,23 +115,32 @@ namespace cJass
 		enum class OpType
 		{
 			Unknown,
+			
+			//Fundamental
+			Id,
 			Constant,
-			Argument,
-			Expression,
-			VarInitExpression,
-			Call,
-			If,
+			Operator,
+			UnaryOperator,
 			Return,
+			NewLine,
+			
+			//Expressions
+			Expression,			//General expression in () brackets or without them
+			Call,				//Function call
+			Index,				//Array index expression [] (not definition)
+			
+			//Blocks
+			If,
 			Elseif,
 			Else,
 			While,
 			Lambda,
-			Operator,
-			UnaryOperator,
-			Id,
-			Wrapper,
-			Index,
-			NewLine
+
+			//Special wrappers
+			Wrapper,			//General wrapper for operations like call, assignment and return
+			Logic,				//Wrapper for logical blocks
+			VarInitExpression,  //Wrapper for local variable initializer
+			Argument			//Wrapper for an argument of function call
 		};
 
 	private:

@@ -109,6 +109,13 @@ namespace cJass
 			case OperationObject::OpType::Wrapper:
 				res += "Wrapper";
 				break;
+
+			case OperationObject::OpType::Logic:
+				res += "Logic";
+				break;
+
+			default:
+				return "Unknown";
 			}
 			res += ")";
 			return res;
@@ -125,6 +132,7 @@ namespace cJass
 		, _tabs(0)
 		, _depthIndex(0)
 		, _isBlock(false)
+		, _isComplete(true)
 	{
 		if (top != nullptr)
 		{
@@ -219,6 +227,16 @@ namespace cJass
 	bool Node::IsBlock() const
 	{
 		return _isBlock;
+	}
+
+	bool Node::IsComplete() const
+	{
+		return _isComplete;
+	}
+
+	void Node::Complete(bool isComplete)
+	{
+		_isComplete = isComplete;
 	}
 
 	GlobalSpace::GlobalSpace(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString)
@@ -404,6 +422,8 @@ namespace cJass
 			return " or ";
 		else if (op == "!")
 			return " not ";
+		else if (op == "!=")
+			return " ~= ";
 		else if (op == "++" || op == "--" || op == "+=" || op == "-=" || op == "*=" || op == "/=")
 			return "";
 		if (op == "dig_minus")
@@ -439,6 +459,8 @@ namespace cJass
 	{
 		size_t nodeCount, lastIndex;
 		bool begin = false;
+		bool allowNewLines = false;
+		size_t stopIndex = 0;
 		if (_otype != OpType::Unknown)
 		{
 			if (_isNewLine)
@@ -543,6 +565,103 @@ namespace cJass
 			_out << "]";
 			break;
 
+		case OpType::Logic:
+			for (size_t i = 0; i < CountSubnodes(); i++)
+			{
+				auto node = AtNode(i);
+				auto prevNode = (i == 0) ? node : AtNode(i - 1);
+				bool isNewLine = (node->GetType() == Node::Type::OperationObject
+					&& node->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::NewLine);
+				bool isNewLinePrev = (prevNode->GetType() == Node::Type::OperationObject
+					&& prevNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::NewLine);
+
+				if ((isNewLine && isNewLinePrev) || (isNewLine && i == CountSubnodes() - 1))
+				{
+					_out << OutputInterface::nl;
+					PrintTabs();
+					_out << "end";
+					allowNewLines = true;
+					stopIndex = i;
+					break;
+				}
+
+				if (!isNewLine)
+					node->ToLua();
+			}
+
+			if (allowNewLines)
+			{
+				for (size_t i = stopIndex; i < CountSubnodes(); i++)
+				{
+					auto node = AtNode(i);
+					node->ToLua();
+				}
+			}
+			else
+			{
+				_out << OutputInterface::nl;
+				PrintTabs();
+				_out << "end";
+			}
+				
+			break;
+
+		case OpType::If:
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "if ";
+			if (CountSubnodes() == 0)
+				appLog(Warning) << "'if' without statement!";
+			for (size_t i = 0; i < CountSubnodes(); i++)
+			{
+				auto node = AtNode(i);
+				node->ToLua();
+				if (i == 0)
+					_out << " then";
+			}
+			break;
+
+		case OpType::Elseif:
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "elseif ";
+			if (CountSubnodes() == 0)
+				appLog(Warning) << "'elseif' without statement!";
+			for (size_t i = 0; i < CountSubnodes(); i++)
+			{
+				auto node = AtNode(i);
+				node->ToLua();
+				if (i == 0)
+					_out << " then";
+			}
+			break;
+
+		case OpType::Else:
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "else";
+			for (auto& node : _subnodes)
+				node->ToLua();
+			break;
+
+		case OpType::While:
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "while ";
+			if (CountSubnodes() == 0)
+				appLog(Warning) << "'while' without statement!";
+			for (size_t i = 0; i < CountSubnodes(); i++)
+			{
+				auto node = AtNode(i);
+				node->ToLua();
+				if (i == 0)
+					_out << " do";
+			}
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "end";
+			break;
+
 		case OpType::Lambda:
 			_out << "function ()";
 			
@@ -601,7 +720,16 @@ namespace cJass
 			_otype = OpType::Expression;
 			if (s[1] == 'b')
 				_inBrackets = true;
+			if (Top()->GetType() == Node::Type::OperationObject &&
+				(Top()->Ptr<OperationObject>()->GetOpType() == OpType::If
+					|| Top()->Ptr<OperationObject>()->GetOpType() == OpType::Elseif
+					|| Top()->Ptr<OperationObject>()->GetOpType() == OpType::While)
+				&& Top()->CountSubnodes() <= 1)
+			{
+				_inBrackets = false;
+			}
 			break;
+
 		case 'v':
 			_otype = OpType::VarInitExpression;
 			break;
@@ -612,6 +740,10 @@ namespace cJass
 
 		case 'r':
 			_otype = OpType::Return;
+			break;
+
+		case 'L':
+			_otype = OpType::Logic;
 			break;
 
 		case 'i':
