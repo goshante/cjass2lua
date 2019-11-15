@@ -41,7 +41,8 @@ namespace cJass
 		aEnd,	//Args end )
 		iBeg,	//Index begin [
 		iEnd,	//Index end ]
-		opEnd	// ;
+		opEnd,	// ;
+		esc		//Backslash
 	};
 
 	enum class word_t
@@ -78,7 +79,6 @@ namespace cJass
 		globals,
 		defs,
 		func,
-		ret,
 		call
 	};
 }

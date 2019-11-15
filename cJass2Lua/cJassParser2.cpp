@@ -23,6 +23,9 @@ namespace cJass
 {
 	word_t classifyWord(const std::string& word)
 	{
+		if (word == "s1")
+			word.c_str();
+
 		if (word == "" || word == " " || word == "	")
 			return word_t::undefined;
 
@@ -152,6 +155,7 @@ namespace cJass
 			|| word == "+"
 			|| word == "="
 			|| word == "=="
+			|| word == "!="
 			|| word == "*"
 			|| word == "/"
 			|| word == "&&"
@@ -186,10 +190,10 @@ namespace cJass
 			|| word == "false"
 			|| word == "null"
 			|| reu::IsMatching(word, "^[0-9]+$")
-			|| reu::IsMatching(word, "^.[0-9]+$")
-			|| reu::IsMatching(word, "^[0-9\\.]{2,}$")
-			|| reu::IsMatching(word, "^\\\".*\\\"$")
-			|| reu::IsMatching(word, "^\\'.*\\'$"))
+			|| reu::IsMatching(word, "^\\.[0-9]+f?$")
+			|| reu::IsMatching(word, "^[0-9\\.]{2,}f?$")
+			|| reu::IsMatching(word, "^'.*'$")
+			|| reu::IsMatching(word, "^\\\".*\\\"$"))
 		{
 			return word_t::constant;
 		}
@@ -248,6 +252,8 @@ namespace cJass
 			return ctype_t::dot;
 		else if (c == ',')
 			return ctype_t::com;
+		else if (c == '\\')
+			return ctype_t::esc;
 		else if (c == '"')
 			return ctype_t::str;
 		else if (c == '"')
@@ -303,6 +309,7 @@ namespace cJass
 		if (_activeNode->Top() != nullptr)
 		{
 			appLog(Debug) << "Popping node" << Node::ToString(_activeNode);
+			_activeNode->Complete(true);
 			_activeNode = _activeNode->Top();
 		}
 		else
@@ -317,7 +324,9 @@ namespace cJass
 		_lastAddedNode = node->Ptr();
 		if (makeActive)
 		{
+			appLog(Debug) << "Pushing node" << Node::ToString(node->Ptr());
 			_activeNode = _activeNode->LastSubnode();
+			_activeNode->Complete(false);
 			return _activeNode;
 		}
 
@@ -330,7 +339,9 @@ namespace cJass
 		_lastAddedNode = node->Ptr();
 		if (makeActive)
 		{
+			appLog(Debug) << "Pushing node" << Node::ToString(node->Ptr());
 			_activeNode = _activeNode->LastSubnode();
+			_activeNode->Complete(false);
 			return _activeNode;
 		}
 
@@ -348,6 +359,7 @@ namespace cJass
 		bool isRawCode = false;
 		bool isIndex = false;
 		_text = text;
+		reu::ReplaceAll(_text, "\\.evaluate", "");
 		_fileName = cjassFileName;
 		_line = 1;
 		_wordPos = 1;
@@ -356,7 +368,6 @@ namespace cJass
 		size_t len = _text.length();
 		ctype_t ctPrev = ctype_t::undefined, ct;
 		std::vector<std::string> vec_arg;
-
 		int parseSteps = 0;
 
 		std::stack<ParseSpecialSubject> subjectStack;
@@ -365,7 +376,7 @@ namespace cJass
 			&isMultilineComment, &isRawCode, &subjectStack](ctype_t explicitParse = ctype_t::undefined) -> void
 		{
 			static bool globalVarDeclaration = false;
-			static size_t ignoreLine = ~0;
+			static bool ignoreLine = false;
 			static word_t wtype = word_t::undefined;
 			static word_t wtype_prev = word_t::undefined;
 			static std::shared_ptr<cJass::Node> tmpNode;
@@ -385,6 +396,38 @@ namespace cJass
 				subjectStack.pop();
 			};
 
+			auto tryToPutNewLine = [this]() -> void
+			{
+				if (wtype_prev == word_t::blockEnd)
+					return;
+
+				bool lastIsLogic = (_activeNode->LastSubnode() != nullptr)
+					? (_activeNode->LastSubnode()->GetType() == Node::Type::OperationObject
+						&& _activeNode->LastSubnode()->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Logic)
+					: false;
+
+				if (_activeNode->IsBlock() || lastIsLogic)
+				{
+					if (wtype_prev == word_t::nl)
+						_addNode(Node::Type::OperationObject, { "N" });
+					return;
+				}
+				
+				if (_activeNode->GetType() == Node::Type::OperationObject)
+				{
+					auto ot = _activeNode->Ptr<OperationObject>()->GetOpType();
+
+					switch (ot)
+					{
+					case OperationObject::OpType::Logic:
+					case OperationObject::OpType::Expression:
+					case OperationObject::OpType::Argument:
+							_addNode(Node::Type::OperationObject, { "N" });
+						break;
+					}
+				}
+			};
+
 			wtype = classifyWord(_word);
 
 			if (_word == "")
@@ -392,8 +435,9 @@ namespace cJass
 				switch (explicitParse)
 				{
 				case ctype_t::nl:
+					ignoreLine = false;
 					if (_activeNode->GetDepth() == 0)
-						return;
+						goto parseWordEnd;
 
 					wtype = word_t::nl;
 					break;
@@ -443,8 +487,8 @@ namespace cJass
 				}
 			}
 
-			if (ignoreLine == _line)
-				return;
+			if (ignoreLine)
+				goto parseWordEnd;
 
 			if (_word == "//")
 			{
@@ -498,7 +542,10 @@ namespace cJass
 			if (_depth() == 0)
 			{
 				if (_word == "library" || _word == "endlibrary")
-					ignoreLine = _line;
+				{
+					ignoreLine = true;
+					goto parseWordEnd;
+				}
 
 				if (_word == ",")
 					goto parseWordEnd;
@@ -531,7 +578,8 @@ namespace cJass
 							vec_arg.push_back("");
 							_rootNode.InitData(vec_arg);
 							vec_arg.clear();
-							vec_arg.push_back(_word);
+							if (_word != ";")
+								vec_arg.push_back(_word);
 							goto parseWordEnd;
 						}
 					}
@@ -602,15 +650,6 @@ namespace cJass
 			}
 			else
 			{
-				if (subjectStack.top() == ParseSpecialSubject::ret)
-				{
-					if (_word == ";")
-					{
-						pops();
-						goto parseWordEnd;
-					}
-				}
-
 				static std::string varName;
 				static std::string varArrSize;
 				static bool writingArrDecl = false;
@@ -618,9 +657,7 @@ namespace cJass
 				bool isVarExprTop = (_activeNode->GetType() == Node::Type::OperationObject
 					&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::VarInitExpression);
 				static bool lambda = false;
-
-				if (_word == "flag")
-					_word = _word;
+				static bool waitingForCondExpr = false;
 
 				if (subjectStack.top() == ParseSpecialSubject::call && argCount.top() == 0 && wtype != word_t::expClose)
 				{
@@ -646,12 +683,25 @@ namespace cJass
 					goto parseWordEnd;
 				}
 
+				if (waitingForCondExpr && wtype != word_t::expOpen)
+				{
+					appLog(Warning) << "Expected condition expression (" << DOC_LINEPOS;
+					goto parseWordEnd;
+				}
+
+				if (_activeNode->GetType() == Node::Type::OperationObject
+					&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Logic)
+				{
+					if (wtype != word_t::elseif && wtype != word_t::Else && wtype != word_t::nl && wtype != word_t::comment)
+						_pop();
+				}
+
 				switch (wtype)
 				{
 				case word_t::retn:
-					subjectStack.push(ParseSpecialSubject::ret);
 					_addNode(Node::Type::OperationObject, { "r" }, true);
 					bstack_set_top(unclosedOpStack, true);
+					bstack_set_top(allowWrappersStack, false);
 					break;
 
 				case word_t::id:
@@ -661,7 +711,7 @@ namespace cJass
 					}
 					else
 					{
-						if (!wrapperStateStack.top() && subjectStack.top() != ParseSpecialSubject::ret && allowWrappersStack.top())
+						if (!wrapperStateStack.top() && allowWrappersStack.top())
 						{
 							_addNode(Node::Type::OperationObject, { "W" }, true);
 							bstack_set_top(wrapperStateStack, true);
@@ -719,7 +769,7 @@ namespace cJass
 					}
 					else
 					{
-						if (!wrapperStateStack.top() && subjectStack.top() != ParseSpecialSubject::ret && allowWrappersStack.top())
+						if (!wrapperStateStack.top() && allowWrappersStack.top())
 						{
 							_addNode(Node::Type::OperationObject, { "W" }, true);
 							bstack_set_top(wrapperStateStack, true);
@@ -750,7 +800,7 @@ namespace cJass
 					break;
 
 				case word_t::constant:
-					if (!wrapperStateStack.top() && subjectStack.top() != ParseSpecialSubject::ret && allowWrappersStack.top())
+					if (!wrapperStateStack.top() && allowWrappersStack.top())
 					{
 						_addNode(Node::Type::OperationObject, { "W" }, true);
 						bstack_set_top(wrapperStateStack, true);
@@ -760,6 +810,9 @@ namespace cJass
 					break;
 
 				case word_t::expOpen:
+					if (waitingForCondExpr)
+						waitingForCondExpr = false;
+
 					if (lambda)
 						goto parseWordEnd;
 
@@ -793,7 +846,18 @@ namespace cJass
 						argCount.pop();
 					}
 					else
+					{
 						_pop();
+						if (_activeNode->GetType() == Node::Type::OperationObject
+							&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::If
+							||  _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Elseif
+							||  _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::While)
+							&& _activeNode->CountSubnodes() == 1)
+						{
+							bstack_set_top(allowWrappersStack, true);
+						}
+						
+					}
 					break;
 
 				case word_t::indexOpen:
@@ -835,12 +899,21 @@ namespace cJass
 					break;
 
 				case word_t::If:
-					break;
-
-				case word_t::Else:
+					_addNode(Node::Type::OperationObject, { "L" }, true);
+					_addNode(Node::Type::OperationObject, { "i" }, true);
+					bstack_set_top(allowWrappersStack, false);
+					waitingForCondExpr = true;
 					break;
 
 				case word_t::elseif:
+					_addNode(Node::Type::OperationObject, { "E" }, true);
+					bstack_set_top(allowWrappersStack, false);
+					waitingForCondExpr = true;
+					break;
+
+				case word_t::Else:
+					_addNode(Node::Type::OperationObject, { "e" }, true);
+					break;
 					break;
 
 				case word_t::lambda:
@@ -892,30 +965,25 @@ namespace cJass
 					break;
 
 				case word_t::loop:
+					_addNode(Node::Type::OperationObject, { "w" }, true);
+					bstack_set_top(allowWrappersStack, false);
+					waitingForCondExpr = true;
 					break;
 					
 				case word_t::nl:
 					if (_strictMode)
 					{
-						if (_activeNode->IsBlock())
-						{
-							if (wtype_prev == word_t::nl)
-								_addNode(Node::Type::OperationObject, { "N" });
-						}
-						else
-							_addNode(Node::Type::OperationObject, { "N" });
-					}
-
-					if (_strictMode)
+						tryToPutNewLine();
 						break;
+					}
 
 					if ((isLocalTop || isVarExprTop)
 						|| (_activeNode->GetType() == Node::Type::OperationObject
 							&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Wrapper
 								|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return
-								|| (   _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Lambda 
+								|| (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Lambda
 									&& _activeNode->Ptr<OperationObject>()->LambdaIsSingle()
-									&& _activeNode->Ptr<OperationObject>()->BlockClosed() ) )))
+									&& _activeNode->Ptr<OperationObject>()->BlockClosed()))))
 					{
 						if (!unclosedOpStack.top())
 							goto parseWordEnd;
@@ -941,26 +1009,18 @@ namespace cJass
 							bstack_set_top(allowWrappersStack, true);
 						}
 
+						if (_activeNode->GetType() == Node::Type::OperationObject
+							&&  _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return)
+							bstack_set_top(allowWrappersStack, true);
+
 						if (wrapperStateStack.top())
 							bstack_set_top(wrapperStateStack, false);
 						bstack_set_top(unclosedOpStack, false);
 						_pop();
-
-						if (_activeNode->IsBlock())
-						{
-							if (wtype_prev == word_t::nl)
-								_addNode(Node::Type::OperationObject, { "N" });
-						}
-						else
-							_addNode(Node::Type::OperationObject, { "N" });
-					}
-					else if (_activeNode->IsBlock())
-					{
-						if (wtype_prev == word_t::nl)
-							_addNode(Node::Type::OperationObject, { "N" });
+						tryToPutNewLine();
 					}
 					else
-						_addNode(Node::Type::OperationObject, { "N" });
+						tryToPutNewLine();
 					break;
 
 				case word_t::end:
@@ -998,6 +1058,10 @@ namespace cJass
 						varArrSize = "";
 						bstack_set_top(allowWrappersStack, true);
 					}
+
+					if (_activeNode->GetType() == Node::Type::OperationObject
+						&&  _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return)
+						bstack_set_top(allowWrappersStack, true);
 					
 					if (wrapperStateStack.top())
 						bstack_set_top(wrapperStateStack, false);
@@ -1072,12 +1136,13 @@ namespace cJass
 				}
 				else
 					_wordPos++;
-
+				
 				if (isString || isMultilineComment || isLineComment || isRawCode)
 				{
-					if (isString && c != '"')
+					if (isString && (c != '"' || c == '"' && ctPrev == ctype_t::esc))
 					{
 						_word.push_back(c);
+						ctPrev = ct;
 						continue;
 					}
 					else if (isMultilineComment)
@@ -1085,6 +1150,7 @@ namespace cJass
 						if (c != '*')
 						{
 							_word.push_back(c);
+							ctPrev = ct;
 							continue;
 						}
 						else
@@ -1092,6 +1158,7 @@ namespace cJass
 							if (next != '/')
 							{
 								_word.push_back(c);
+								ctPrev = ct;
 								continue;
 							}
 						}
@@ -1100,23 +1167,25 @@ namespace cJass
 					else if (isLineComment && c != '\r' && c != '\n')
 					{
 						_word.push_back(c);
+						ctPrev = ct;
 						continue;
 					}
 					else if (isRawCode && c != '\'')
 					{
 						_word.push_back(c);
+						ctPrev = ct;
 						continue;
 					}
 				}
 
-				if (isString && c == '"')
+				if (isString && c == '"' && ctPrev != ctype_t::esc)
 				{
 					parseWord();
 					isString = false;
 					ctPrev = ct;
 					continue;
 				}
-				else if (isMultilineComment && c == '*' && next == '/')
+				else if (isMultilineComment && c == '*' && next == '/' && ctPrev != ctype_t::esc)
 				{
 					parseWord();
 					isMultilineComment = false;
@@ -1182,6 +1251,10 @@ namespace cJass
 				case ctype_t::raw:
 					parseWord();
 					isRawCode = true;
+					break;
+
+				case ctype_t::esc:
+					parseWord();
 					break;
 
 				case ctype_t::nlr:

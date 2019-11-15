@@ -23,7 +23,5 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 *In development...*
 
 ### ToDo
-- if/elseif/else
-- Loop while
 - Console interface
 - Config file

@@ -489,9 +489,9 @@ namespace reu
 		while (m.IsMatching())
 		{
 			m.Replace(pattern);
+			m = Search(str, re, off);
 			replaces++;
 			off = m.End() + 1;
-			m = Search(str, re, off);
 		}
 
 		return replaces;
