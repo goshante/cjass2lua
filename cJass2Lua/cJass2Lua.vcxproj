@@ -153,6 +153,7 @@
     <ClInclude Include="reutils.h" />
     <ClInclude Include="Settings.h" />
     <ClInclude Include="singleton.h" />
+    <ClInclude Include="Utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cJassNodes.cpp" />
@@ -162,6 +163,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="OutputInterface.cpp" />
     <ClCompile Include="reutils.cpp" />
+    <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -11,7 +11,7 @@ namespace Settings
 	extern bool								StrictMode;
 	extern bool								IgnoreComments;
 	extern bool								ConvertRawCodes;
-	extern std::string						OutputNewLineType;
+	extern OutputInterface::NewLineType		OutputNewLineType;
 	extern std::string						OutputLanguage;
 	extern _____LOGGER::Logger::Level		LogLevel;
 }
@@ -23,7 +23,7 @@ namespace Settings
 	bool									StrictMode = false;
 	bool									IgnoreComments = false;
 	bool									ConvertRawCodes = false;
-	std::string								OutputNewLineType = "CRLF";
+	OutputInterface::NewLineType			OutputNewLineType = OutputInterface::NewLineType::CRLF;
 	std::string								OutputLanguage = "Lua";
 	_____LOGGER::Logger::Level				LogLevel = LOGLVL(Debug);
 
@@ -32,9 +32,17 @@ namespace Settings
 		Settings::StrictMode = cmgr.GetValue_Bool("Settings", "StrictMode", false);
 		Settings::IgnoreComments = cmgr.GetValue_Bool("Settings", "IgnoreComments", false);
 		Settings::ConvertRawCodes = cmgr.GetValue_Bool("Settings", "ConvertRawCodes", false);
-		Settings::OutputNewLineType = cmgr.GetValue_Str("Settings", "OutputNewLineType", "CRLF");
+		std::string nlType = cmgr.GetValue_Str("Settings", "OutputNewLineType", "CRLF");
 		Settings::OutputLanguage = cmgr.GetValue_Str("Settings", "OutputLanguage", "Lua");
 		Settings::LogLevel = static_cast<_____LOGGER::Logger::Level>(cmgr.GetValue_Num<int>("Settings", "LogLevel", 0));
+
+		if (nlType == "CR")
+			Settings::OutputNewLineType = OutputInterface::NewLineType::CR;
+		else if (nlType == "LF")
+			Settings::OutputNewLineType = OutputInterface::NewLineType::LF;
+		else if (nlType == "CRLF")
+			Settings::OutputNewLineType = OutputInterface::NewLineType::CRLF;
+
 		cmgr.Save();
 		cmgr.SaveAs("config.ini");
 	}

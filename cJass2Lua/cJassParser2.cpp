@@ -1,6 +1,8 @@
 #include "cJassParser2.h"
-#include "reutils.h"
 #include <sstream>
+
+#include "reutils.h"
+#include "Utils.h"
 
 #include "Settings.h"
 
@@ -18,6 +20,13 @@ void bstack_set_top(std::stack<bool>& st, bool b)
 {
 	st.pop();
 	st.push(b);
+}
+
+template <class Stack>
+void stack_clear(Stack stack)
+{
+	while (!stack.empty())
+		stack.pop();
 }
 
 
@@ -292,13 +301,13 @@ namespace cJass
 		return ctype_t::unk;
 	}
 
-	Parser2::Parser2(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString)
-		: _text("")
+	Parser2::Parser2()
+		: _outIf(OutputInterface::Type::File, Settings::OutputNewLineType)
+		, _text("")
 		, _word("")
-		, _rootNode(outputType, nlType, fileNameOrString)
+		, _rootNode(_outIf)
 		, _activeNode(&_rootNode)
 		, _lastAddedNode(&_rootNode)
-		, _unitIsComplete(false)
 		, _line(0)
 		, _wordPos(0)
 		, _fileName("")
@@ -320,7 +329,7 @@ namespace cJass
 
 	Node* Parser2::_addNode(cJass::Node::Type type, const std::vector<std::string> data, bool makeActive)
 	{
-		auto node = Node::Produce(type, _activeNode);
+		auto node = Node::Produce(type, _activeNode, _outIf);
 		node->InitData(data);
 		_activeNode->AddSubnode(node);
 		_lastAddedNode = node->Ptr();
@@ -350,7 +359,7 @@ namespace cJass
 		return _activeNode->LastSubnode();
 	}
 
-	void Parser2::Parse(csref_t text, csref_t cjassFileName)
+	void Parser2::Parse(csref_t cjassFileName, csref_t outputFileName)
 	{
 		char c;
 		char prev = '\0';
@@ -360,7 +369,18 @@ namespace cJass
 		bool isMultilineComment = false;
 		bool isRawCode = false;
 		bool isIndex = false;
-		_text = text;
+		
+		if (!fileExists(cjassFileName.c_str()))
+		{
+			appLog(Critical) << "Unable to open file" << cjassFileName;
+			return;
+		}
+		
+		_text = FileToString(cjassFileName);
+		_activeNode = &_rootNode;
+		_lastAddedNode = _activeNode;
+		_rootNode.Clear();
+		_outIf.SetOutputFile(outputFileName);
 		reu::ReplaceAll(_text, "\\.evaluate", "");
 		_fileName = cjassFileName;
 		_line = 1;
@@ -372,10 +392,12 @@ namespace cJass
 		std::vector<std::string> vec_arg;
 		int parseSteps = 0;
 
+		appLog(Info) << "Parsing file" << cjassFileName;
+
 		std::stack<ParseSpecialSubject> subjectStack;
 		subjectStack.push(ParseSpecialSubject::none);
 		auto parseWord = [this, &prevWord, &parseSteps, &vec_arg, ctPrev, &isString, &isLineComment,
-			&isMultilineComment, &isRawCode, &subjectStack](ctype_t explicitParse = ctype_t::undefined) -> void
+			&isMultilineComment, &isRawCode, &subjectStack](ctype_t explicitParse = ctype_t::undefined, bool clearStatic = false) -> void
 		{
 			static bool globalVarDeclaration = false;
 			static bool ignoreLine = false;
@@ -383,6 +405,11 @@ namespace cJass
 			static word_t wtype_prev = word_t::undefined;
 			static std::shared_ptr<cJass::Node> tmpNode;
 			static auto prevActive = _activeNode;
+			static std::string varName;
+			static std::string varArrSize;
+			static bool lambda = false;
+			static bool waitingForCondExpr = false;
+			static bool writingArrDecl = false;
 			static std::stack<cJass::Node*> arrNodeStackLast;
 			static std::stack<cJass::Node*> arrNodeStackActive;
 			static std::stack<cJass::Node*> callNodeStackLast;
@@ -392,6 +419,30 @@ namespace cJass
 			static std::stack<bool>			varAddedStack;
 			static std::stack<bool>			unclosedOpStack;
 
+			if (clearStatic)
+			{
+				globalVarDeclaration = false;
+				ignoreLine = false;
+				wtype = word_t::undefined;
+				wtype_prev = word_t::undefined;
+				tmpNode = nullptr;
+				prevActive = _activeNode;
+				varName = "";
+				varArrSize = "";
+				lambda = false;
+				waitingForCondExpr = false;
+				writingArrDecl = false;
+				stack_clear(arrNodeStackLast);
+				stack_clear(arrNodeStackActive);
+				stack_clear(callNodeStackLast);
+				stack_clear(argCount);
+				stack_clear(wrapperStateStack);
+				stack_clear(allowWrappersStack);
+				stack_clear(varAddedStack);
+				stack_clear(unclosedOpStack);
+				return;
+			}
+			
 			auto pops = [this, &subjectStack]() -> void
 			{
 				_pop();
@@ -653,19 +704,15 @@ namespace cJass
 			}
 			else
 			{
-				static std::string varName;
-				static std::string varArrSize;
-				static bool writingArrDecl = false;
 				bool isLocalTop = _activeNode->GetType() == Node::Type::LocalDeclaration;
 				bool isVarExprTop = (_activeNode->GetType() == Node::Type::OperationObject
 					&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::VarInitExpression);
-				static bool lambda = false;
-				static bool waitingForCondExpr = false;
+				
 
 				if (subjectStack.top() == ParseSpecialSubject::call && argCount.top() == 0 && wtype != word_t::expClose)
 				{
 					callNodeStackLast.push(_lastAddedNode);
-					tmpNode = Node::Produce(Node::Type::OperationObject, _activeNode);
+					tmpNode = Node::Produce(Node::Type::OperationObject, _activeNode, _outIf);
 					tmpNode->InitData({ "a" });
 					_activeNode->AddSubnode(tmpNode);
 					_activeNode = tmpNode->Ptr();
@@ -876,7 +923,7 @@ namespace cJass
 					else if (_lastAddedNode->GetType() == Node::Type::OperationObject
 						&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
 					{
-						tmpNode = Node::Produce(Node::Type::OperationObject, _lastAddedNode);
+						tmpNode = Node::Produce(Node::Type::OperationObject, _lastAddedNode, _outIf);
 						tmpNode->InitData({ "n" });
 						_lastAddedNode->AddSubnode(tmpNode);
 						arrNodeStackActive.push(_activeNode);
@@ -956,7 +1003,7 @@ namespace cJass
 							&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Argument)
 						{
 							_pop();
-							tmpNode = Node::Produce(Node::Type::OperationObject, _activeNode);
+							tmpNode = Node::Produce(Node::Type::OperationObject, _activeNode, _outIf);
 							tmpNode->InitData({ "a" });
 							_activeNode->AddSubnode(tmpNode);
 							_activeNode = tmpNode->Ptr();
@@ -1113,6 +1160,7 @@ namespace cJass
 			wtype_prev = wtype;
 			_word = "";
 		};
+		parseWord(ctype_t::unk, true);
 
 		appLog(Info) << "Starting parse of \"" << _fileName << "\"";
 		appLog(Debug) << "Parsing line" << 1;
@@ -1288,7 +1336,7 @@ namespace cJass
 
 				ctPrev = ct;
 			}
-			appLog(Info) << "Parse successfuly done!" << _line;
+			appLog(Info) << "Parsing of file " << cjassFileName << " successfuly done!" << _line;
 		}
 		catch (const std::exception& ex)
 		{
