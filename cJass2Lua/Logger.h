@@ -7,11 +7,14 @@
 
 namespace _____LOGGER
 {
+	const char __logFileName[] = "cjass2lua.log";
+
 	class Logger : public OutputInterface
 	{
 	public:
 		enum class Level
 		{
+			Clear,
 			Debug,
 			Info,
 			Warning,
@@ -81,7 +84,7 @@ namespace _____LOGGER
 	};
 
 #ifdef _LOGGER_MAIN_CPP
-	Logger ___Logger(OutputInterface::Type::File, "cjass2lua.log");
+	Logger ___Logger(OutputInterface::Type::File, __logFileName);
 #else
 	extern Logger ___Logger;
 #endif

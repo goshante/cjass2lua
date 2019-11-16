@@ -253,10 +253,12 @@ namespace Utils
 		return argv;
 	}
 
-	std::string op2lua(const std::string& op)
+	std::string op2lua(const std::string& op, cJass::OperationObject::ConstType prevType)
 	{
 		if (op == "&&")
 			return " and ";
+		else if (op == "+" && prevType == cJass::OperationObject::ConstType::String)
+			return " .. ";
 		else if (op == "||")
 			return " or ";
 		else if (op == "!")
@@ -303,5 +305,25 @@ namespace Utils
 			return "nil";
 
 		return cnst;
+	}
+
+	cJass::OperationObject::ConstType determConstType(const std::string& cjConst)
+	{
+		if (cjConst == "null")
+			return cJass::OperationObject::ConstType::null;
+		else if (cjConst == "true" || cjConst == "false")
+			return cJass::OperationObject::ConstType::Bool;
+		else if (reu::IsMatching(cjConst, "^[0-9]*\\.[0-9]*$"))
+			return cJass::OperationObject::ConstType::Float;
+		else if (reu::IsMatching(cjConst, "^[0-9]+$"))
+			return cJass::OperationObject::ConstType::Integer;
+		else if (cjConst == "")
+			return cJass::OperationObject::ConstType::Undefined;
+		else if (cjConst[0] == '\'')
+			return cJass::OperationObject::ConstType::RawCode;
+		else if (cjConst[0] == '"')
+			return cJass::OperationObject::ConstType::String;
+
+		return cJass::OperationObject::ConstType::Undefined;
 	}
 }

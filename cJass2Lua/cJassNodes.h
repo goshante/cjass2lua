@@ -36,10 +36,11 @@ namespace cJass
 		int					_depthIndex;
 		bool				_isBlock;
 		bool				_isComplete;
+		size_t				_topIndex;
+		Node*				_top;
 
 	private:
 		Type				_type;
-		Node*				_top;
 		NL_iter				_it;
 
 
@@ -56,7 +57,7 @@ namespace cJass
 		void AddSubnode(NodePtr node);
 		Type GetType() const;
 		size_t CountSubnodes() const;
-		Node* Top();
+		Node* Top() const;
 		Node* LastSubnode();
 		void PrintTabs(int substract = 0);
 		size_t GetDepth() const;
@@ -122,6 +123,8 @@ namespace cJass
 			UnaryOperator,
 			Return,
 			NewLine,
+			ExitWhen,
+			DoStatement,
 			
 			//Expressions
 			Expression,			//General expression in () brackets or without them
@@ -133,6 +136,9 @@ namespace cJass
 			Elseif,
 			Else,
 			While,
+			WhileNot,
+			Do,
+			Loop,
 			Lambda,
 
 			//Special wrappers
@@ -140,6 +146,17 @@ namespace cJass
 			Logic,				//Wrapper for logical blocks
 			VarInitExpression,  //Wrapper for local variable initializer
 			Argument			//Wrapper for an argument of function call
+		};
+
+		enum class ConstType
+		{
+			Undefined,
+			Integer,
+			RawCode,
+			Float,
+			Bool,
+			String,
+			null
 		};
 
 	private:
@@ -150,6 +167,8 @@ namespace cJass
 		bool			_unaryExpr;
 		bool			_lambdaIsSingle;
 		bool			_blockClosed;
+		ConstType		_cType;
+		bool			_AssignUnary;
 
 	public:
 		OperationObject(OutputInterface& outIf, Node* top);
@@ -160,6 +179,7 @@ namespace cJass
 		bool LambdaIsSingle() const;
 		bool BlockClosed() const;
 		void CloseBlock();
+		ConstType PrevConstType();
 	};
 
 	class LocalDeclaration : public Node

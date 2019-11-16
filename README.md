@@ -1,4 +1,4 @@
-# cjass2lua
+# cJass2Lua
 ## Useful converter from cJass to Lua for Warcraft III scripts
 
 ## Description
@@ -29,9 +29,11 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 - You have no objects or classes/structures
 - You have no JASS syntax (as loop/andloop, if/else and function definition). But some vJass features added (; is not necessary, set, local, call keywords are parsed correctly. 
 - Read logs if something foes wrong, this application leaves cjass2lua.log file with all it's actions and possible problems. Everything should be fine if you have no warnings.
+- String concatecation in Lua is done with '..' operator instead of '+'. In some cases cJass2Lua is able to replace it, but in most cases it should be fixed manually.
+- Pre-increments or post-increments are supported and can be used in expressions, but for example a = i++ will be converted into a = (i + 1) and i will not be incremented. In this cases you need to increment it manually.
 
 ### Latest release
-- [v1.02](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.02)
+- [v1.03](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.03)
 
 ### Manual
 #### GUI
@@ -49,6 +51,10 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 - OutputLanguage - Only "Lua" is available. An output language to translate. 
 - OutputNewLineType - Can be "CR", "LF" or "CRLF". Type of new line in file.
 - StrictMode - Can be TRUE or FALSE. If TRUE - you must close every operation with ';'. Causes errors when ';' is missing. If FALSE - new line is an end for operation (but ';' is also accepted).
+- DoNotIncrementArrayIndexConstants - Can be TRUE or FALSE. If TRUE - array constant integer indexes are not changed. If FALSE - they are incremented by 1. Cuz in Lua first array index is 1 instead of 0.
+- ClearLogsOnNewTranslate - Clear logs on every next translation.
+
+- 'Pathes' settings block - last used input and output pathes
 
 ### Troubleshooting
 Create an issue and pin your log file with debug log level (0) if you shure that problem is in application.
