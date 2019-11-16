@@ -32,7 +32,7 @@ namespace cJass
 	public:
 		Parser2();
 
-		void Parse(csref_t cjassFileName, csref_t outputFileName);
-		void ToLua();
+		void Parse(csref_t cjassFileName);
+		void ToLua(csref_t outputFileName);
 	};
 }

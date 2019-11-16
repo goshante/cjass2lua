@@ -245,6 +245,7 @@ namespace cJass
 		if (word == "local"
 			|| word == "call"
 			|| word == "set"
+			|| word == "array"
 			|| word == "function")
 			return word_t::ignore;
 
@@ -359,7 +360,7 @@ namespace cJass
 		return _activeNode->LastSubnode();
 	}
 
-	void Parser2::Parse(csref_t cjassFileName, csref_t outputFileName)
+	void Parser2::Parse(csref_t cjassFileName)
 	{
 		char c;
 		char prev = '\0';
@@ -380,7 +381,6 @@ namespace cJass
 		_activeNode = &_rootNode;
 		_lastAddedNode = _activeNode;
 		_rootNode.Clear();
-		_outIf.SetOutputFile(outputFileName);
 		reu::ReplaceAll(_text, "\\.evaluate", "");
 		_fileName = cjassFileName;
 		_line = 1;
@@ -543,6 +543,18 @@ namespace cJass
 			if (ignoreLine)
 				goto parseWordEnd;
 
+			if (isString)
+			{
+				_word = "\"" + _word + "\"";
+				wtype = word_t::constant;
+			}
+
+			if (isRawCode)
+			{
+				_word = "'" + _word + "'";
+				wtype = word_t::constant;
+			}
+
 			if (_word == "//")
 			{
 				isLineComment = true;
@@ -562,18 +574,6 @@ namespace cJass
 			{
 				globalVarDeclaration = true;
 				goto parseWordEnd;
-			}
-
-			if (isString)
-			{
-				_word = "\"" + _word + "\"";
-				wtype = word_t::constant;
-			}
-
-			if (isRawCode)
-			{
-				_word = "'" + _word + "'";
-				wtype = word_t::constant;
 			}
 
 			if (isLineComment || isMultilineComment)
@@ -1345,9 +1345,43 @@ namespace cJass
 		}
 	}
 
-	void Parser2::ToLua()
+	void Parser2::ToLua(csref_t outputFileName)
 	{
+		if (!dirExists(outputFileName) && outputFileName != "")
+			_outIf.SetOutputFile(outputFileName);
+		else
+		{
+			std::string path = outputFileName;
+			std::string fileName;
+			
+			if (_fileName.find("\\") != std::string::npos || _fileName.find("/") != std::string::npos)
+				fileName = reu::IndexSubstr(_fileName, _fileName.find_last_of("\\/") + 1, _fileName.length() - 1);
+			else
+				fileName = _fileName;
+
+			if (fileName.find(".") != std::string::npos)
+				fileName = reu::IndexSubstr(fileName, 0, fileName.find_last_of(".")) + "lua";
+			else
+				fileName += ".lua";
+
+			if (path == "")
+				path = _fileName.substr(0, _fileName.find_last_of("\\/"));
+
+			if (path[path.length() - 1] == '/' || path[path.length() - 1] == '\\')
+				path += fileName;
+			else
+			{
+				if (path.find("\\") != std::string::npos)
+					path += "\\";
+				else
+					path += "/";
+				path += fileName;
+			}
+
+			_outIf.SetOutputFile(path);
+		}
 		_rootNode.ToLua();
+		_outIf.Close();
 	}
 
 	size_t Parser2::_depth() const

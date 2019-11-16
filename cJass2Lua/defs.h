@@ -8,9 +8,10 @@
 #include "Logger.h"
 
 #pragma warning(disable : 4005)
+#pragma warning(disable : 4834)
 
 
-#define APP_VER		"0.16"
+#define APP_VER		"1.00"
 #ifdef _WIN64
 #define APP_BUILD	"x64"
 #else
