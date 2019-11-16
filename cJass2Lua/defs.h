@@ -11,7 +11,7 @@
 #pragma warning(disable : 4834)
 
 
-#define APP_VER		"1.00"
+#define APP_VER		"1.01"
 #ifdef _WIN64
 #define APP_BUILD	"x64"
 #else
@@ -27,7 +27,7 @@ namespace cJass
 
 	class Node;
 	using NodePtr = ::std::shared_ptr<Node>;
-	using NodeList = ::std::list<NodePtr>;
+	using NodeList = ::std::vector<NodePtr>;
 	using NL_iter = NodeList::iterator;
 
 	enum class ctype_t

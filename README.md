@@ -2,10 +2,10 @@
 ## Useful converter from cJass to Lua for Warcraft III scripts
 
 ## Description
-Warcraft III Reforged brought us lua scripting, but still a lot of map makers for WC3 are using cJass. Just because C-sytle syntax rules. Unfortunately cJass extension is unsupported for Reforged and who knows how it will be. Lua is more efficient, useful and simple for game development. But a lot of projects are still on cJass and no way to convert them to Lua. Editor without cJass extension does not perceive this code. Re-writing code manualy to Lua could take a lot of time, nobody wants to waste time on it. This tool comes to solve this problem. cjass2lua tool can easily convert cJass to readable Lua code, it will help you to upgrade your map by modern map development patterns.
+Warcraft III Reforged brought us lua scripting, but still a lot of map makers for WC3 are using cJass. Just because C-style syntax rules. Unfortunately cJass extension is unsupported for Reforged and who knows how it will be. Lua is more efficient, useful and simple for game development. But a lot of projects are still on cJass and no way to convert them to Lua. Editor without cJass extension does not perceive this code. Re-writing code manually to Lua could take a lot of time, nobody wants to waste time on it. This tool comes to solve this problem. cjass2lua tool can easily convert cJass to readable Lua code, it will help you to upgrade your map by modern map development patterns.
 
 ### Features
-- Analysing and syntax checking cJass code
+- Analyzing and syntax checking cJass code
 - Producing .lua file with converted code of your cJass code
 - Advanced logging of application
 - Opportunity to implement output for any other script language
@@ -21,7 +21,7 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 - Macroses. Only constants, function and variable shorters. Macroses are translated into global variables.
 
 ### Latest release
-- [v1.00](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.00)
+- [v1.01](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.01)
 
 ### Manual
 #### GUI
