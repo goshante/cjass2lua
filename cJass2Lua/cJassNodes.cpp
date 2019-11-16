@@ -189,18 +189,10 @@ namespace cJass
 
 	NodePtr Node::AtNode(size_t i)
 	{
-		auto it = _subnodes.begin();
-		size_t n = 0;
-		while (it != _subnodes.end())
-		{
-			if (n == i)
-				return *it;
-			it++;
-			n++;
-		}
-
-		throw std::runtime_error("Node::AtNode: Out of subnode's list boundaries.");
-		return nullptr;
+		if (i >= _subnodes.size())
+			throw std::runtime_error("Node::AtNode: Out of subnode's list boundaries.");
+		
+		return _subnodes[i];
 	}
 
 	void Node::PrintTabs(int substract)
@@ -211,12 +203,7 @@ namespace cJass
 
 	size_t Node::CountSubnodes() const
 	{
-		size_t count = 0;
-
-		for (const auto& node : _subnodes)
-			count++;
-
-		return count;
+		return _subnodes.size();
 	}
 
 	size_t Node::GetDepth() const
@@ -883,6 +870,44 @@ namespace cJass
 		_out << OutputInterface::nl;
 		PrintTabs();
 		_out << "local ";
+
+		//Group vars with init to begin
+		std::vector<std::string>		   vv;
+		std::vector<std::string>		   av;
+		std::vector<std::shared_ptr<Node>> nv;
+		for (size_t i = 0; i < _vars.size(); i++)
+		{
+			if (_subnodes[i]->CountSubnodes() != 0 || _arrSizes[i] != "")
+			{
+
+				auto v = _vars[i];
+				auto a = _arrSizes[i];
+				auto n = _subnodes[i];
+
+				vv.push_back(v);
+				av.push_back(a);
+				nv.push_back(n);
+			}
+		}
+
+		for (size_t i = 0; i < _vars.size(); i++)
+		{
+			if (_subnodes[i]->CountSubnodes() == 0 && _arrSizes[i] == "")
+			{
+
+				auto v = _vars[i];
+				auto a = _arrSizes[i];
+				auto n = _subnodes[i];
+
+				vv.push_back(v);
+				av.push_back(a);
+				nv.push_back(n);
+			}
+		}
+
+		_vars = vv;
+		_arrSizes = av;
+		_subnodes = nv;
 
 		for (size_t i = 0; i < _vars.size(); i++)
 		{

@@ -27,7 +27,7 @@ namespace cJass
 
 	class Node;
 	using NodePtr = ::std::shared_ptr<Node>;
-	using NodeList = ::std::list<NodePtr>;
+	using NodeList = ::std::vector<NodePtr>;
 	using NL_iter = NodeList::iterator;
 
 	enum class ctype_t
