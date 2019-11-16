@@ -1,5 +1,6 @@
 #include "cJassNodes.h"
 #include "reutils.h"
+#include "Settings.h"
 
 #define d if (1 == 2) \
 
@@ -432,10 +433,48 @@ namespace cJass
 		return " " + op + " ";
 	}
 
+	int rawCodeToInt(std::string code)
+	{
+		if (code.find("'") != std::string::npos)
+			code = reu::IndexSubstr(code, 1, code.length() - 1);
+
+		auto char2Id = [](char c) -> int
+		{
+			int i = 0;
+			std::string abc = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+			char t;
+
+			do
+			{
+				t = abc[i];
+				i++;
+			} while (t != '\0' && t != c);
+
+			if (i < 10)
+				return i + 48;
+			else if (i < 36)
+				return i + 65 - 10;
+
+			return i + 97 - 36;
+		};
+
+		int n = 0;
+
+		for (char& c : code)
+			n += char2Id(c) * 256;
+		
+		return n;
+	}
+
 	std::string const2lua(const std::string& cnst)
 	{
 		if (cnst[0] == '\'')
-			return "FourCC(" + cnst + ")";
+		{
+			if (Settings::ConvertRawCodes)
+				return std::to_string(rawCodeToInt(cnst));
+			else
+				return "FourCC(" + cnst + ")";
+		}
 
 		if (cnst == "null")
 			return "nil";

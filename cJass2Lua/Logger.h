@@ -89,5 +89,6 @@ namespace _____LOGGER
 
 
 
-#define APP_LOG_LEVEL(lvl) _____LOGGER::___Logger.level(_____LOGGER::Logger::Level::lvl)
+#define LOGLVL(lvl)			_____LOGGER::Logger::Level::lvl
+#define APP_LOG_LEVEL(lvl) _____LOGGER::___Logger.level(lvl)
 #define appLog(lvl) _____LOGGER::Logger::Writer(__FILE__, __FUNCTION__, __LINE__, _____LOGGER::Logger::Level::lvl, _____LOGGER::___Logger)

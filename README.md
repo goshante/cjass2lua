@@ -23,5 +23,4 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 *In development...*
 
 ### ToDo
-- Console interface
-- Config file
+- GUI Interface

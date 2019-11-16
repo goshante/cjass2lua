@@ -2,6 +2,8 @@
 #include "reutils.h"
 #include <sstream>
 
+#include "Settings.h"
+
 #define DOC_LINEPOS "(" << _line << ":" << _wordPos << ")"
 
 void stack_incr_top(std::stack<int>& st)
@@ -300,7 +302,7 @@ namespace cJass
 		, _line(0)
 		, _wordPos(0)
 		, _fileName("")
-		, _strictMode(false)
+		, _strictMode(Settings::StrictMode)
 	{
 	}
 
@@ -528,7 +530,8 @@ namespace cJass
 				if (_depth() == 0)
 				{
 					_word = "\n" + _word;
-					_addNode(Node::Type::Comment, { _word });
+					if (!Settings::IgnoreComments)
+						_addNode(Node::Type::Comment, { _word });
 					goto parseWordEnd;
 				}
 				else
@@ -923,7 +926,8 @@ namespace cJass
 				case word_t::comment:
 					if (wtype_prev == word_t::nl)
 						_word = "\n" + _word;
-					_addNode(Node::Type::Comment, { _word });
+					if (!Settings::IgnoreComments)
+						_addNode(Node::Type::Comment, { _word });
 					break;
 
 				case word_t::next:
