@@ -9,6 +9,14 @@
 
 #pragma warning(disable : 4005)
 
+
+#define APP_VER		"0.16"
+#ifdef _WIN64
+#define APP_BUILD	"x64"
+#else
+#define APP_BUILD	"x86"
+#endif
+
 #define min(a,b) ((a < b) ? a : b)
 #define max(a,b) ((a > b) ? a : b)
 
