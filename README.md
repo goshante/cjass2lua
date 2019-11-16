@@ -21,7 +21,7 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 - Macroses. Only constants, function and variable shorters. Macroses are translated into global variables.
 
 ### Latest release
-- [v1.00](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.00)
+- [v1.01](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.01)
 
 ### Manual
 #### GUI
