@@ -46,16 +46,19 @@ protected:
 
 	virtual void _toOutput(const std::string& str);
 
+	OutputInterface(const OutputInterface& copy) = delete;
+	OutputInterface& operator=(const OutputInterface& copy) = delete;
+
 public:
 
 	OutputInterface();
 	OutputInterface(Type type, NewLineType nlType, std::string& fileNameOrString);
-	OutputInterface(const OutputInterface& copy);
+	OutputInterface(Type type, NewLineType nlType);
 	virtual ~OutputInterface(){}
 
 	bool IsReady() const;
+	void SetOutputFile(const std::string& fname);
 
-	OutputInterface& operator=(const OutputInterface& copy);
 	OutputInterface& operator<<(const std::string& str);
 	OutputInterface& operator<<(const NewLine&);
 };

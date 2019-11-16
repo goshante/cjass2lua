@@ -31,7 +31,7 @@ namespace cJass
 	protected:
 		bool				_isNewLine;
 		size_t				_tabs;
-		OutputInterface		_out;
+		OutputInterface&	_out;
 		NodeList			_subnodes;
 		int					_depthIndex;
 		bool				_isBlock;
@@ -46,13 +46,11 @@ namespace cJass
 		Node(Node&) = delete;
 
 	public:
-		static NodePtr Produce(Node::Type type, Node* top
-			, OutputInterface::Type outputType = OutputInterface::Type::None
-			, OutputInterface::NewLineType nlType = OutputInterface::NewLineType::LF);
+		static NodePtr Produce(Node::Type type, Node* top, OutputInterface& outIf);
 
 		static std::string ToString(Node* node);
 
-		Node(Type type = Type::Undefined, Node* top = nullptr);
+		Node(OutputInterface& outIf, Type type = Type::Undefined, Node* top = nullptr);
 		virtual ~Node();
 
 		void AddSubnode(NodePtr node);
@@ -80,9 +78,10 @@ namespace cJass
 		std::vector<variable_t> _globals;
 
 	public:
-		GlobalSpace(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString);
+		GlobalSpace(OutputInterface& outIf);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
+		void Clear();
 	};
 
 	class Comment : public Node
@@ -91,7 +90,7 @@ namespace cJass
 		std::string _comment;
 
 	public:
-		Comment(Node* top);
+		Comment(OutputInterface& outIf, Node* top);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
@@ -104,7 +103,7 @@ namespace cJass
 		std::vector<std::string>	_args;
 
 	public:
-		Function(Node* top);
+		Function(OutputInterface& outIf, Node* top);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
@@ -153,7 +152,7 @@ namespace cJass
 		bool			_blockClosed;
 
 	public:
-		OperationObject(Node* top);
+		OperationObject(OutputInterface& outIf, Node* top);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 		OpType GetOpType() const;
@@ -171,7 +170,7 @@ namespace cJass
 		std::vector<std::string>	_arrSizes;
 
 	public:
-		LocalDeclaration(Node* top);
+		LocalDeclaration(OutputInterface& outIf, Node* top);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 		size_t GetVarCount() const;

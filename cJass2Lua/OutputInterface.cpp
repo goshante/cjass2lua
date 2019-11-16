@@ -49,20 +49,24 @@ OutputInterface::OutputInterface(Type type, NewLineType nlType, std::string& fil
 	}
 }
 
-OutputInterface::OutputInterface(const OutputInterface& copy)
-	: _type(copy._type)
-	, _file(_file)
-	, _strPtr(copy._strPtr)
-	, _nl(copy._nl)
+OutputInterface::OutputInterface(Type type, NewLineType nlType)
+	: _type(type)
+	, _file(nullptr)
+	, _strPtr(nullptr)
 {
-}
+	switch (nlType)
+	{
+	case NewLineType::CR:
+		_nl = "\r";
+		break;
+	case NewLineType::LF:
+		_nl = "\n";
+		break;
 
-OutputInterface& OutputInterface::operator=(const OutputInterface& copy)
-{
-	_type = copy._type;
-	_file = copy._file;
-	_strPtr = copy._strPtr;
-	return *this;
+	case NewLineType::CRLF:
+		_nl = "\r\n";
+		break;
+	}
 }
 
 void OutputInterface::_toOutput(const std::string& str)
@@ -103,4 +107,14 @@ OutputInterface& OutputInterface::operator<<(const NewLine&)
 bool OutputInterface::IsReady() const
 {
 	return (_type != Type::None);
+}
+
+void OutputInterface::SetOutputFile(const std::string& fname)
+{
+	_file.reset();
+	HANDLE hFile = CreateFileA(fname.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
+		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, NULL);
+	if (hFile == 0 || hFile == HANDLE(~0))
+		throw std::runtime_error("OutputInterface::OutputInterface: Cannot open file " + fname + " for writing.");
+	_file = std::shared_ptr<WinHandle>(new WinHandle(hFile));
 }

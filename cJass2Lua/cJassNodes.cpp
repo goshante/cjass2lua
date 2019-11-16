@@ -5,11 +5,11 @@
 #define d if (1 == 2) \
 
 #define PRODUCING_NODE(__node__) case Node::Type::##__node__: \
-			return std::shared_ptr<__node__>(new __node__(top))
+			return std::shared_ptr<__node__>(new __node__(outIf, top))
 
 namespace cJass
 {
-	NodePtr Node::Produce(Node::Type type, Node* top, OutputInterface::Type outputType, OutputInterface::NewLineType nlType)
+	NodePtr Node::Produce(Node::Type type, Node* top, OutputInterface& outIf)
 	{
 		switch (type)
 		{
@@ -126,8 +126,9 @@ namespace cJass
 		}
 	}
 
-	Node::Node(Type type, Node* top) 
+	Node::Node(OutputInterface& outIf, Type type, Node* top)
 		: _type(type)
+		, _out(outIf)
 		, _top(top)
 		, _isNewLine(false)
 		, _tabs(0)
@@ -138,7 +139,6 @@ namespace cJass
 		if (top != nullptr)
 		{
 			_depthIndex = top->_depthIndex;
-			_out = top->_out;
 		}
 	}
 
@@ -150,8 +150,6 @@ namespace cJass
 	{
 		if (node->_depthIndex == 0)
 			node->_depthIndex = _depthIndex + 1;
-		if (!node->_out.IsReady())
-			node->_out = _out;
 		_subnodes.push_back(node);
 		ResetIterator();
 	}
@@ -240,11 +238,10 @@ namespace cJass
 		_isComplete = isComplete;
 	}
 
-	GlobalSpace::GlobalSpace(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString)
-		: Node(Node::Type::GlobalSpace, nullptr)
+	GlobalSpace::GlobalSpace(OutputInterface& outIf)
+		: Node(outIf, Node::Type::GlobalSpace, nullptr)
 		, _globals({})
 	{
-		_out = OutputInterface(outputType, nlType, fileNameOrString);
 	}
 
 	void GlobalSpace::ToLua() 
@@ -293,8 +290,16 @@ namespace cJass
 		}
 	}
 
-	Comment::Comment(Node* top)
-		: Node(Node::Type::Comment, top)
+	void GlobalSpace::Clear()
+	{
+		_tabs = 0;
+		_subnodes.clear();
+		_globals.clear();
+		ResetIterator();
+	}
+
+	Comment::Comment(OutputInterface& outIf, Node* top)
+		: Node(outIf, Node::Type::Comment, top)
 		, _comment("")
 	{
 	}
@@ -359,8 +364,8 @@ namespace cJass
 			_comment = reu::IndexSubstr(_comment, 0, last - cutLen);
 	}
 
-	Function::Function(Node* top)
-		: Node(Node::Type::Function, top)
+	Function::Function(OutputInterface& outIf, Node* top)
+		: Node(outIf, Node::Type::Function, top)
 		, _name("")
 		, _returnType("")
 		, _args({})
@@ -482,8 +487,8 @@ namespace cJass
 		return cnst;
 	}
 
-	OperationObject::OperationObject(Node* top)
-		: Node(Node::Type::OperationObject, top)
+	OperationObject::OperationObject(OutputInterface& outIf, Node* top)
+		: Node(outIf, Node::Type::OperationObject, top)
 		, _opText("")
 		, _extra("")
 		, _otype(OpType::Unknown)
@@ -874,8 +879,8 @@ namespace cJass
 		_blockClosed = true;
 	}
 
-	LocalDeclaration::LocalDeclaration(Node* top)
-		: Node(Node::Type::LocalDeclaration, top)
+	LocalDeclaration::LocalDeclaration(OutputInterface& outIf, Node* top)
+		: Node(outIf, Node::Type::LocalDeclaration, top)
 		, _type("")
 		, _vars({})
 		, _arrSizes({})
@@ -937,7 +942,7 @@ namespace cJass
 		appLog(Debug) << "Adding local variable" << name;
 		_vars.push_back(name);
 		_arrSizes.push_back(arrSize);
-		auto node = Node::Produce(Node::Type::OperationObject, this);
+		auto node = Node::Produce(Node::Type::OperationObject, this, _out);
 		node->InitData({ "v" });
 		AddSubnode(node);
 		return node->Ptr();

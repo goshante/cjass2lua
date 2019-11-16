@@ -7,20 +7,34 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 ### Features
 - Analysing and syntax checking cJass code
 - Producing .lua file with converted code of your cJass code
-- Advanced logging
+- Advanced logging of application
 - Opportunity to implement output for any other script language
+- 100% readable code formatting
+- Saving comments, comment positions and new lines, function and variable names, spaces in expressions
+- Config file with application's settings
+- Minimalistic and simple GUI interface
 
 ### Unsupported features
-- Analyzing classes/structures and converting them to meta tables
+- Analyzing classes/structures and converting them to Lua meta table implementation
 - JASS/vJASS Syntax
 - Pre-processor directives
 - Macroses. Only constants, function and variable shorters. Macroses are translated into global variables.
 
-### Manual
-*In development...*
-
 ### Latest release
 *In development...*
 
-### ToDo
-- GUI Interface
+### Manual
+1. Enter destination path of cJass text file (or folder with cJass files)
+2. Enter destination path of output Lua file (or folder) to save Lua file(s)
+3. Click Translate
+
+### Config options description
+- ConvertRawCodes - Can be TRUE or FALSE. If TRUE - converts raw codes (such as 'A0D3' or 'I0AX') in corresponding integers. If FALSE wraps raw code into FourCC() Lua call.
+- IgnoreComments - Can be TRUE or FALSE. If TRUE - all comments will be ignored.
+- LogLevel - Value between 0 and 4. Minimal allowed log message type. 0 - Debug, 1 - Info, 2 - Warning, 3 - Critical, 4 - Fatal.
+- OutputLanguage - Only "Lua" is available. An output language to translate. 
+- OutputNewLineType - Can be "CR", "LF" or "CRLF". Type of new line in file.
+- StrictMode - Can be TRUE or FALSE. If TRUE - you must close every operation with ';'. Causes errors when ';' is missing. If FALSE - new line is an end for operation (but ';' is also accepted).
+
+### Troubleshooting
+Create an issue and pin your log file with debug log level (0) if you shure that problem is in application.

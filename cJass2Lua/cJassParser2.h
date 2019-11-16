@@ -13,12 +13,12 @@ namespace cJass
 	class Parser2
 	{
 	private:
+		OutputInterface			_outIf;
 		std::string				_text;
 		std::string				_word;
 		GlobalSpace				_rootNode;
 		Node*					_activeNode;
 		Node*					_lastAddedNode;
-		bool					_unitIsComplete;
 		size_t					_line;
 		size_t					_wordPos;
 		std::string				_fileName;
@@ -30,9 +30,9 @@ namespace cJass
 		size_t _depth() const;
 
 	public:
-		Parser2(OutputInterface::Type outputType, OutputInterface::NewLineType nlType, std::string& fileNameOrString);
+		Parser2();
 
-		void Parse(csref_t text, csref_t cjassFileName);
+		void Parse(csref_t cjassFileName, csref_t outputFileName);
 		void ToLua();
 	};
 }
