@@ -11,15 +11,17 @@
 #include "ConfigMgr.h"
 #include "Utils.h"
 #include "reutils.h"
+#include "resource.h"
 
 #define DEFINE_SETTINGS
 #include "Settings.h"
 
 namespace fs = std::filesystem;
+static bool g_firstRunDone = false;
 
 enum
 {
-	IDC_INPUT = 101,
+	IDC_INPUT = 201,
 	IDC_OUTPUT,
 	IDC_STATUS,
 	IDC_BUTTON
@@ -114,6 +116,7 @@ void parserThread(ParseArgs args)
 			}
 			else
 				throw std::runtime_error("Input file does not exists.");
+		g_firstRunDone = true;
 		}
 	}
 	catch (const std::exception& ex)
@@ -122,6 +125,7 @@ void parserThread(ParseArgs args)
 		SetWindowTextA(args.status, (std::string("Status: Error - ") + ex.what()).c_str());
 		EnableWindow(args.button, true);
 		UpdateWindow(args.hwnd);
+		g_firstRunDone = true;
 	}
 }
 
@@ -189,11 +193,13 @@ void parse_thisThread(const std::string& in, const std::string& out)
 			else
 				throw std::runtime_error("Input file does not exists.");
 		}
+		g_firstRunDone = true;
 	}
 	catch (const std::exception& ex)
 	{
 		appLog(Fatal) << ex.what();
 		std::cout << "Error: " << ex.what() << std::endl;
+		g_firstRunDone = true;
 	}
 }
 
@@ -207,7 +213,7 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		wc.hInstance = hInstance;
 		wc.lpszClassName = CLASS_NAME;
 		wc.hbrBackground = (HBRUSH)COLOR_WINDOW;
-		wc.hIcon = NULL;
+		wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MAINICON));
 
 		int width = 436;
 		int height = 250;
@@ -236,11 +242,11 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		int ox = 0, oy = 0;
 		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Input file or directory"), hInstance, WS_VISIBLE, NULL, NULL, 10 + ox, 4 + oy, 132, 20, false);
 		oy += 17;
-		Utils::CreateWindowElement(hwnd, ET_EDIT, TEXT(""), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_INPUT), 10 + ox, 4 + oy, 400, 23, false);
+		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastInputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_INPUT), 10 + ox, 4 + oy, 400, 23, false);
 		oy += 27;
 		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Output file or directory"), hInstance, WS_VISIBLE, NULL, NULL, 10 + ox, 4 + oy, 132, 20, false);
 		oy += 17;
-		Utils::CreateWindowElement(hwnd, ET_EDIT, TEXT(""), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_OUTPUT), 10 + ox, 4 + oy, 400, 23, false);
+		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastOutputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_OUTPUT), 10 + ox, 4 + oy, 400, 23, false);
 		oy += 27;
 		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Status: Ready"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_STATUS), 10 + ox, 4 + oy, 400, 45, false);
 		oy += 79;
@@ -276,7 +282,6 @@ int main()
 	{
 		appLog(Info) << "Starting cJass2Lua application (version" << APP_VER << "/" << APP_BUILD << ")";
 		std::cout << std::string("cJass2Lua v") + APP_VER + " " + APP_BUILD << std::endl;
-		CConfigMgr	config;
 		LPSTR* szArgList;
 		int argCount;
 		szArgList = Utils::CommandLineToArgvA(GetCommandLine(), &argCount);
@@ -285,9 +290,9 @@ int main()
 			::ShowWindow(::GetConsoleWindow(), SW_HIDE);
 
 		if (!Utils::fileExists("config.ini"))
-			Settings::Reset(config);
-		config.Load("config.ini");
-		Settings::Load(config);
+			Settings::Reset();
+		Settings::config.Load("config.ini");
+		Settings::Load();
 
 		APP_LOG_LEVEL(Settings::LogLevel);
 		if (Settings::OutputLanguage != "Lua")
@@ -350,6 +355,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		switch (wp)
 		{
 		case IDC_BUTTON:
+			if (g_firstRunDone && Settings::ClearLogsOnNewTranslate)
+				appLog(Clear);
 			GetWindowText(input, buf, sizeof(buf));
 			args.in = buf;
 			GetWindowText(output, buf, sizeof(buf));
@@ -357,6 +364,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			args.button = btn;
 			args.status = status;
 			args.hwnd = hwnd;
+			Settings::lastInputPath = args.in;
+			Settings::lastOutputPath = args.out;
+			Settings::Save();
 			EnableWindow(btn, false);
 			SetWindowTextA(status, "Status: Starting parser...");
 			UpdateWindow(hwnd);

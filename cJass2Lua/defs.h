@@ -11,7 +11,7 @@
 #pragma warning(disable : 4834)
 
 
-#define APP_VER		"1.02"
+#define APP_VER		"1.03"
 #ifdef _WIN64
 #define APP_BUILD	"x64"
 #else
@@ -75,11 +75,16 @@ namespace cJass
 		elseif,
 		comment,
 		next,
-		loop,
+		While,
 		end,
 		blockBegin,
 		blockEnd,
-		ignore
+		ignore,
+		Do,
+		whilenot,
+		then,
+		exitwhen,
+		loop
 	};
 
 	enum class ParseSpecialSubject

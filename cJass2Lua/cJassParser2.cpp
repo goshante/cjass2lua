@@ -156,6 +156,18 @@ namespace cJass
 			return word_t::type;
 		}
 
+		if (word == "do")
+			return word_t::Do;
+
+		if (word == "whilenot")
+			return word_t::whilenot;
+
+		if (word == "then")
+			return word_t::then; 
+
+		if (word == "exitwhen")
+			return word_t::exitwhen;
+
 		if (word == "return")
 			return word_t::retn;
 
@@ -240,6 +252,9 @@ namespace cJass
 			return word_t::elseif;
 
 		if (word == "while")
+			return word_t::While;
+
+		if (word == "loop")
 			return word_t::loop;
 
 		if (word == "local"
@@ -418,7 +433,8 @@ namespace cJass
 			static std::stack<bool>			allowWrappersStack;
 			static std::stack<bool>			varAddedStack;
 			static std::stack<bool>			unclosedOpStack;
-			static std::string				addNext = "";
+			static std::string				preUnary;
+			static bool						statementNeedsClosing = false;
 
 			if (clearStatic)
 			{
@@ -433,6 +449,7 @@ namespace cJass
 				lambda = false;
 				waitingForCondExpr = false;
 				writingArrDecl = false;
+				preUnary = "";
 				stack_clear(arrNodeStackLast);
 				stack_clear(arrNodeStackActive);
 				stack_clear(callNodeStackLast);
@@ -441,7 +458,6 @@ namespace cJass
 				stack_clear(allowWrappersStack);
 				stack_clear(varAddedStack);
 				stack_clear(unclosedOpStack);
-				addNext = "";
 				return;
 			}
 			
@@ -491,13 +507,17 @@ namespace cJass
 				{
 				case ctype_t::nl:
 					ignoreLine = false;
-					if (_activeNode->GetDepth() == 0)
+					if (_activeNode->GetDepth() == 0 
+						&& subjectStack.top() != ParseSpecialSubject::defs
+						&& !globalVarDeclaration)
 						goto parseWordEnd;
 
 					wtype = word_t::nl;
 					break;
 
 				case ctype_t::aBeg:
+					if (subjectStack.top() != ParseSpecialSubject::defs)
+						_word = "(";
 					wtype = word_t::expOpen;
 					break;
 
@@ -540,18 +560,6 @@ namespace cJass
 				default:
 					return;
 				}
-			}
-
-			if (wtype == word_t::op && _depth() == 0 && _word != "=")
-			{
-				addNext = _word;
-				goto parseWordEnd;
-			}
-
-			if (addNext != "")
-			{
-				_word = addNext + _word;
-				addNext = "";
 			}
 
 			if (ignoreLine)
@@ -669,9 +677,19 @@ namespace cJass
 					if (vec_arg.size() == 0)
 						vec_arg.push_back("");
 
-					vec_arg.push_back(_word);
-
-					if (globalVarDeclaration)
+					if (wtype != word_t::nl)
+					{
+						auto prevConstType = Utils::determConstType(prevWord);
+						if (wtype == word_t::op)
+							_word = Utils::op2lua(_word, prevConstType);
+						
+						if (vec_arg.size() == 3)
+							vec_arg[2].append(_word);
+						else
+							vec_arg.push_back(_word);
+					}
+						
+					if (globalVarDeclaration && wtype == word_t::nl)
 					{
 						_rootNode.InitData(vec_arg);
 						vec_arg.clear();
@@ -751,8 +769,9 @@ namespace cJass
 
 				if (waitingForCondExpr && wtype != word_t::expOpen)
 				{
-					appLog(Warning) << "Expected condition expression (" << DOC_LINEPOS;
-					goto parseWordEnd;
+					_addNode(Node::Type::OperationObject, { "x" }, true);
+					waitingForCondExpr = false;
+					statementNeedsClosing = true;
 				}
 
 				if (_activeNode->GetType() == Node::Type::OperationObject
@@ -762,10 +781,22 @@ namespace cJass
 						_pop();
 				}
 
+				if (preUnary != "" && wtype != word_t::id)
+				{
+					appLog(Warning) << "Unknown usage of unary operator" << preUnary << DOC_LINEPOS;
+					preUnary = "";
+				}
+
 				switch (wtype)
 				{
 				case word_t::retn:
 					_addNode(Node::Type::OperationObject, { "r" }, true);
+					bstack_set_top(unclosedOpStack, true);
+					bstack_set_top(allowWrappersStack, false);
+					break;
+
+				case word_t::exitwhen:
+					_addNode(Node::Type::OperationObject, { "T" }, true);
 					bstack_set_top(unclosedOpStack, true);
 					bstack_set_top(allowWrappersStack, false);
 					break;
@@ -777,11 +808,30 @@ namespace cJass
 					}
 					else
 					{
-						if (!wrapperStateStack.top() && allowWrappersStack.top())
+						if (preUnary != "")
 						{
-							_addNode(Node::Type::OperationObject, { "W" }, true);
-							bstack_set_top(wrapperStateStack, true);
-							bstack_set_top(unclosedOpStack, true);
+							if (_activeNode->GetType() == Node::Type::OperationObject
+								&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Wrapper
+								&& _activeNode->CountSubnodes() < 2)
+							{
+								_lastAddedNode->InitData({ "ua", _word, preUnary });
+							}
+							else
+							{
+								_lastAddedNode->InitData({ "ub", _word, preUnary });
+							}
+							appLog(Debug) << "Adding pre-increment" << preUnary << _word;
+							preUnary = "";
+							break;
+						}
+						else
+						{
+							if (!wrapperStateStack.top() && allowWrappersStack.top())
+							{
+								_addNode(Node::Type::OperationObject, { "W" }, true);
+								bstack_set_top(wrapperStateStack, true);
+								bstack_set_top(unclosedOpStack, true);
+							}
 						}
 
 						_addNode(Node::Type::OperationObject, { "I", _word });
@@ -795,7 +845,9 @@ namespace cJass
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Expression
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::VarInitExpression
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Index
-							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return) && !lambda)
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::DoStatement
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::ExitWhen) && !lambda)
 					{
 						appLog(Warning) << "Unexpected typename" << _word << DOC_LINEPOS;
 						goto parseWordEnd;
@@ -850,11 +902,44 @@ namespace cJass
 					break;
 
 				case word_t::unary:
-					if (_lastAddedNode->GetType() == Node::Type::OperationObject
-						&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
-						_lastAddedNode->InitData({ "u", prevWord, _word });
+					if (_activeNode->LastSubnode() != nullptr
+						&& _activeNode->LastSubnode()->GetType() == Node::Type::OperationObject
+						&& _activeNode->LastSubnode()->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
+					{
+						if (_activeNode->GetType() == Node::Type::OperationObject
+							&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Wrapper
+							&& _activeNode->CountSubnodes() < 2)
+						{
+							_lastAddedNode->InitData({ "ua", prevWord, _word });
+						}
+						else
+						{
+							_lastAddedNode->InitData({ "ub", prevWord, _word });
+						}
+						appLog(Debug) << "Adding post-increment" << _word << prevWord;
+					}
 					else
-						appLog(Warning) << "Unary operator not after identifier.(" << _line << ":" << _wordPos << ")";
+					{
+						if (!wrapperStateStack.top() && allowWrappersStack.top())
+						{
+							_addNode(Node::Type::OperationObject, { "W" }, true);
+							bstack_set_top(wrapperStateStack, true);
+							bstack_set_top(unclosedOpStack, true);
+						}
+
+						if (_activeNode->GetType() == Node::Type::OperationObject
+							&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Wrapper
+							&& _activeNode->CountSubnodes() < 2)
+						{
+							_addNode(Node::Type::OperationObject, { "ua", _word, _word });
+						}
+						else
+						{
+							_addNode(Node::Type::OperationObject, { "ub", _word, _word });
+						}
+						preUnary = _word;
+					}
+						
 					break;
 
 				case word_t::unaryExpr:
@@ -862,7 +947,7 @@ namespace cJass
 						&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Id)
 						_lastAddedNode->InitData({ "ue", prevWord, _word });
 					else
-						appLog(Warning) << "Unary expression not after identifier.(" << _line << ":" << _wordPos << ")";
+						preUnary = _word;
 					break;
 
 				case word_t::constant:
@@ -917,7 +1002,10 @@ namespace cJass
 						if (_activeNode->GetType() == Node::Type::OperationObject
 							&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::If
 							||  _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Elseif
-							||  _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::While)
+							||  _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::While
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::WhileNot
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Do
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Loop)
 							&& _activeNode->CountSubnodes() == 1)
 						{
 							bstack_set_top(allowWrappersStack, true);
@@ -1031,23 +1119,81 @@ namespace cJass
 					}
 					break;
 
+				case word_t::Do:
+					_addNode(Node::Type::OperationObject, { "D" }, true);
+					break;
+
+				case word_t::While:
+					if (_activeNode->LastSubnode() != nullptr
+						&& _activeNode->LastSubnode()->GetType() == Node::Type::OperationObject
+						&& _activeNode->LastSubnode()->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Do)
+					{
+						_addNode(Node::Type::OperationObject, { "S" }, true);
+						bstack_set_top(allowWrappersStack, false);
+						waitingForCondExpr = true;
+					}
+					else
+					{
+						_addNode(Node::Type::OperationObject, { "w" }, true);
+						bstack_set_top(allowWrappersStack, false);
+						waitingForCondExpr = true;
+					}
+					break;
+
+				case word_t::whilenot:
+					if (_activeNode->LastSubnode() != nullptr
+						&& _activeNode->LastSubnode()->GetType() == Node::Type::OperationObject
+						&& _activeNode->LastSubnode()->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Do)
+					{
+						_addNode(Node::Type::OperationObject, { "Sn" }, true);
+						bstack_set_top(allowWrappersStack, false);
+						waitingForCondExpr = true;
+					}
+					else
+					{
+						_addNode(Node::Type::OperationObject, { "wn" }, true);
+						bstack_set_top(allowWrappersStack, false);
+						waitingForCondExpr = true;
+					}
+					break;
+
+				case word_t::then:
+					_pop();
+					bstack_set_top(allowWrappersStack, true);
+					statementNeedsClosing = false;
+					break;
+
 				case word_t::loop:
-					_addNode(Node::Type::OperationObject, { "w" }, true);
-					bstack_set_top(allowWrappersStack, false);
-					waitingForCondExpr = true;
+					_addNode(Node::Type::OperationObject, { "P" }, true);
 					break;
 					
 				case word_t::nl:
+
+					if (statementNeedsClosing)
+					{
+						_pop();
+						bstack_set_top(allowWrappersStack, true);
+						statementNeedsClosing = false;
+					}
+
 					if (_strictMode)
 					{
 						tryToPutNewLine();
 						break;
 					}
 
+					if (_activeNode->GetType() == Node::Type::OperationObject
+						&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::DoStatement)
+					{
+						_pop();
+					}
+
 					if ((isLocalTop || isVarExprTop)
 						|| (_activeNode->GetType() == Node::Type::OperationObject
 							&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Wrapper
 								|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return
+								|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::ExitWhen
+								|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::DoStatement
 								|| (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Lambda
 									&& _activeNode->Ptr<OperationObject>()->LambdaIsSingle()
 									&& _activeNode->Ptr<OperationObject>()->BlockClosed()))))
@@ -1077,7 +1223,9 @@ namespace cJass
 						}
 
 						if (_activeNode->GetType() == Node::Type::OperationObject
-							&&  _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return)
+							&&  (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return
+								|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::ExitWhen
+								|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::DoStatement))
 							bstack_set_top(allowWrappersStack, true);
 
 						if (wrapperStateStack.top())
@@ -1097,6 +1245,12 @@ namespace cJass
 					{
 						appLog(Warning) << "Missing expression or call close )" << DOC_LINEPOS;
 						goto parseWordEnd;
+					}
+
+					if (_activeNode->GetType() == Node::Type::OperationObject
+						&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::DoStatement)
+					{
+						_pop();
 					}
 
 					if (!unclosedOpStack.top())
@@ -1127,7 +1281,9 @@ namespace cJass
 					}
 
 					if (_activeNode->GetType() == Node::Type::OperationObject
-						&&  _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return)
+						&&  (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::ExitWhen
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::DoStatement))
 						bstack_set_top(allowWrappersStack, true);
 					
 					if (wrapperStateStack.top())
