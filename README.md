@@ -7,12 +7,15 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 ### Features
 - Analyzing and syntax checking cJass code
 - Producing .lua file with converted code of your cJass code
+- Single file conversion
+- Massive folder-to-folder conversion
 - Advanced logging of application
 - Opportunity to implement output for any other script language
 - 100% readable code formatting
 - Saving comments, comment positions and new lines, function and variable names, spaces in expressions
 - Config file with application's settings
 - Minimalistic and simple GUI interface
+- Command line interface
 
 ### Unsupported features
 - Analyzing classes/structures and converting them to Lua meta table implementation
@@ -20,8 +23,15 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 - Pre-processor directives
 - Macroses. Only constants, function and variable shorters. Macroses are translated into global variables.
 
+### Pay attention to this before translating your code
+- Your code is 100% correct
+- Array indexes in Lua are starting from 1, not from 0 and no way to fix it automatically. BUT all single integer indexes are incremented by 1. All variables and condition must be fixes manually.
+- You have no objects or classes/structures
+- You have no JASS syntax (as loop/andloop, if/else and function definition). But some vJass features added (; is not necessary, set, local, call keywords are parsed correctly. 
+- Read logs if something foes wrong, this application leaves cjass2lua.log file with all it's actions and possible problems. Everything should be fine if you have no warnings.
+
 ### Latest release
-- [v1.01](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.01)
+- [v1.02](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.02)
 
 ### Manual
 #### GUI

@@ -1,6 +1,7 @@
 #include "cJassNodes.h"
 #include "reutils.h"
 #include "Settings.h"
+#include "Utils.h"
 #include <cmath>
 
 #define d if (1 == 2) \
@@ -413,58 +414,6 @@ namespace cJass
 			_args.push_back(strings[i]);
 	}
 
-	std::string op2lua(const std::string& op)
-	{
-		if (op == "&&")
-			return " and ";
-		else if (op == "||")
-			return " or ";
-		else if (op == "!")
-			return " not ";
-		else if (op == "!=")
-			return " ~= ";
-		else if (op == "++" || op == "--" || op == "+=" || op == "-=" || op == "*=" || op == "/=")
-			return "";
-		if (op == "dig_minus")
-			return "-";
-
-		return " " + op + " ";
-	}
-
-	int rawCodeToInt(std::string code)
-	{
-		auto match = reu::Search(code, "^'(.*)'$");
-		if (match.IsMatching())
-			code = match[1];
-
-		int n = 0;
-		int p = 0;
-		for (auto it = code.rbegin(); it != code.rend(); it++)
-		{
-			char c = *it;
-			n += c * int(pow(256, p));
-			p++;
-		}
-		
-		return n;
-	}
-
-	std::string const2lua(const std::string& cnst)
-	{
-		if (cnst[0] == '\'')
-		{
-			if (Settings::ConvertRawCodes)
-				return std::to_string(rawCodeToInt(cnst));
-			else
-				return "FourCC(" + cnst + ")";
-		}
-
-		if (cnst == "null")
-			return "nil";
-
-		return cnst;
-	}
-
 	OperationObject::OperationObject(OutputInterface& outIf, Node* top)
 		: Node(outIf, Node::Type::OperationObject, top)
 		, _opText("")
@@ -483,6 +432,9 @@ namespace cJass
 		bool begin = false;
 		bool allowNewLines = false;
 		size_t stopIndex = 0;
+		std::string stmp;
+		int itmp;
+
 		if (_otype != OpType::Unknown)
 		{
 			if (_isNewLine)
@@ -496,17 +448,17 @@ namespace cJass
 		switch (_otype)
 		{
 		case OpType::Id:
-			_out << const2lua(_opText);
+			_out << Utils::const2lua(_opText);
 			for (auto& node : _subnodes)
 				node->ToLua();
 			break;
 
 		case OpType::Constant:
-			_out << const2lua(_opText);
+			_out << Utils::const2lua(_opText);
 			break;
 
 		case OpType::Operator:
-			_out << op2lua(_opText);
+			_out << Utils::op2lua(_opText);
 			break;
 
 		case OpType::UnaryOperator:
@@ -582,8 +534,20 @@ namespace cJass
 
 		case OpType::Index:
 			_out << "[";
-			for (auto& node : _subnodes)
-				node->ToLua();
+			if (_subnodes.size() == 1 
+				&& _subnodes[0]->GetType() == Node::Type::OperationObject
+				&& _subnodes[0]->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Constant
+				&& reu::IsMatching(_subnodes[0]->Ptr<OperationObject>()->_opText, "^[0-9]+$"))
+			{
+				itmp = atoi(_subnodes[0]->Ptr<OperationObject>()->_opText.c_str()) + 1;
+				_subnodes[0]->Ptr<OperationObject>()->_opText = std::to_string(itmp);
+				_subnodes[0]->ToLua();
+			}
+			else
+			{
+				for (auto& node : _subnodes)
+					node->ToLua();
+			}
 			_out << "]";
 			break;
 

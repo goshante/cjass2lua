@@ -371,13 +371,13 @@ namespace cJass
 		bool isRawCode = false;
 		bool isIndex = false;
 		
-		if (!fileExists(cjassFileName.c_str()))
+		if (!Utils::fileExists(cjassFileName.c_str()))
 		{
 			appLog(Critical) << "Unable to open file" << cjassFileName;
 			return;
 		}
 		
-		_text = FileToString(cjassFileName);
+		_text = Utils::FileToString(cjassFileName);
 		_activeNode = &_rootNode;
 		_lastAddedNode = _activeNode;
 		_rootNode.Clear();
@@ -418,6 +418,7 @@ namespace cJass
 			static std::stack<bool>			allowWrappersStack;
 			static std::stack<bool>			varAddedStack;
 			static std::stack<bool>			unclosedOpStack;
+			static std::string				addNext = "";
 
 			if (clearStatic)
 			{
@@ -440,6 +441,7 @@ namespace cJass
 				stack_clear(allowWrappersStack);
 				stack_clear(varAddedStack);
 				stack_clear(unclosedOpStack);
+				addNext = "";
 				return;
 			}
 			
@@ -540,6 +542,18 @@ namespace cJass
 				}
 			}
 
+			if (wtype == word_t::op && _depth() == 0 && _word != "=")
+			{
+				addNext = _word;
+				goto parseWordEnd;
+			}
+
+			if (addNext != "")
+			{
+				_word = addNext + _word;
+				addNext = "";
+			}
+
 			if (ignoreLine)
 				goto parseWordEnd;
 
@@ -552,6 +566,8 @@ namespace cJass
 			if (isRawCode)
 			{
 				_word = "'" + _word + "'";
+				if (_depth() == 0)
+					_word = Utils::const2lua(_word);
 				wtype = word_t::constant;
 			}
 
@@ -1347,7 +1363,7 @@ namespace cJass
 
 	void Parser2::ToLua(csref_t outputFileName)
 	{
-		if (!dirExists(outputFileName) && outputFileName != "")
+		if (!Utils::dirExists(outputFileName) && outputFileName != "")
 			_outIf.SetOutputFile(outputFileName);
 		else
 		{
