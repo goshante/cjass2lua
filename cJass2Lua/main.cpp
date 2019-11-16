@@ -47,11 +47,11 @@ void parserThread(ParseArgs args)
 		std::string status2 = "Status: Generating code for file ";
 		std::string fname;
 
-		if (dirExists(args.in))
+		if (Utils::dirExists(args.in))
 		{
-			if (fileExists(args.out))
+			if (Utils::fileExists(args.out))
 				throw std::runtime_error("Output path when input is directory must be directory.");
-			else if (!dirExists(args.out))
+			else if (!Utils::dirExists(args.out))
 				SHCreateDirectoryEx(NULL, args.out.c_str(), NULL);
 
 			for (auto& entry : fs::directory_iterator(args.in))
@@ -60,17 +60,17 @@ void parserThread(ParseArgs args)
 				status2 = "Status: Generating code for file ";
 				fname = entry.path().u8string();
 
-				if (dirExists(fname))
+				if (Utils::dirExists(fname))
 					continue;
 
-				if (!strEndsWith(fname, ".txt")
-					&& !strEndsWith(fname, ".j")
-					&& !strEndsWith(fname, ".jass")
-					&& !strEndsWith(fname, ".cjass")
-					&& !strEndsWith(fname, ".cj")
-					&& !strEndsWith(fname, ".jj")
-					&& !strEndsWith(fname, ".w3j")
-					&& !strEndsWith(fname, ".w3cj"))
+				if (!Utils::strEndsWith(fname, ".txt")
+					&& !Utils::strEndsWith(fname, ".j")
+					&& !Utils::strEndsWith(fname, ".jass")
+					&& !Utils::strEndsWith(fname, ".cjass")
+					&& !Utils::strEndsWith(fname, ".cj")
+					&& !Utils::strEndsWith(fname, ".jj")
+					&& !Utils::strEndsWith(fname, ".w3j")
+					&& !Utils::strEndsWith(fname, ".w3cj"))
 					continue;
 
 				status += reu::IndexSubstr(fname, fname.find_last_of("\\/") + 1, fname.length() - 1) + " ...";
@@ -89,7 +89,7 @@ void parserThread(ParseArgs args)
 		}
 		else
 		{
-			if (fileExists(args.in))
+			if (Utils::fileExists(args.in))
 			{
 				if (args.in.find("\\") != std::string::npos || args.in.find("/") != std::string::npos)
 				{
@@ -138,11 +138,11 @@ void parse_thisThread(const std::string& in, const std::string& out)
 		std::string status2 = "Status: Generating code for file ";
 		std::string fname;
 
-		if (dirExists(in))
+		if (Utils::dirExists(in))
 		{
-			if (fileExists(out))
+			if (Utils::fileExists(out))
 				throw std::runtime_error("Output path when input is directory must be directory.");
-			else if (!dirExists(out))
+			else if (!Utils::dirExists(out))
 				SHCreateDirectoryEx(NULL, out.c_str(), NULL);
 
 			for (auto& entry : fs::directory_iterator(in))
@@ -151,17 +151,17 @@ void parse_thisThread(const std::string& in, const std::string& out)
 				status2 = "Status: Generating code for file ";
 				fname = entry.path().u8string();
 
-				if (dirExists(fname))
+				if (Utils::dirExists(fname))
 					continue;
 
-				if (!strEndsWith(fname, ".txt")
-					&& !strEndsWith(fname, ".j")
-					&& !strEndsWith(fname, ".jass")
-					&& !strEndsWith(fname, ".cjass")
-					&& !strEndsWith(fname, ".cj")
-					&& !strEndsWith(fname, ".jj")
-					&& !strEndsWith(fname, ".w3j")
-					&& !strEndsWith(fname, ".w3cj"))
+				if (!Utils::strEndsWith(fname, ".txt")
+					&& !Utils::strEndsWith(fname, ".j")
+					&& !Utils::strEndsWith(fname, ".jass")
+					&& !Utils::strEndsWith(fname, ".cjass")
+					&& !Utils::strEndsWith(fname, ".cj")
+					&& !Utils::strEndsWith(fname, ".jj")
+					&& !Utils::strEndsWith(fname, ".w3j")
+					&& !Utils::strEndsWith(fname, ".w3cj"))
 					continue;
 
 				status += reu::IndexSubstr(fname, fname.find_last_of("\\/") + 1, fname.length() - 1) + " ...";
@@ -177,7 +177,7 @@ void parse_thisThread(const std::string& in, const std::string& out)
 		}
 		else
 		{
-			if (fileExists(in))
+			if (Utils::fileExists(in))
 			{
 				std::cout << "Parsing file " << in << " ..." << std::endl;
 				_parser->Parse(in);
@@ -234,17 +234,17 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 		//Begin constructing window
 		int ox = 0, oy = 0;
-		CreateWindowElement(hwnd, ET_STATIC, TEXT("Input file or directory"), hInstance, WS_VISIBLE, NULL, NULL, 10 + ox, 4 + oy, 132, 20, false);
+		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Input file or directory"), hInstance, WS_VISIBLE, NULL, NULL, 10 + ox, 4 + oy, 132, 20, false);
 		oy += 17;
-		CreateWindowElement(hwnd, ET_EDIT, TEXT(""), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_INPUT), 10 + ox, 4 + oy, 400, 23, false);
+		Utils::CreateWindowElement(hwnd, ET_EDIT, TEXT(""), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_INPUT), 10 + ox, 4 + oy, 400, 23, false);
 		oy += 27;
-		CreateWindowElement(hwnd, ET_STATIC, TEXT("Output file or directory"), hInstance, WS_VISIBLE, NULL, NULL, 10 + ox, 4 + oy, 132, 20, false);
+		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Output file or directory"), hInstance, WS_VISIBLE, NULL, NULL, 10 + ox, 4 + oy, 132, 20, false);
 		oy += 17;
-		CreateWindowElement(hwnd, ET_EDIT, TEXT(""), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_OUTPUT), 10 + ox, 4 + oy, 400, 23, false);
+		Utils::CreateWindowElement(hwnd, ET_EDIT, TEXT(""), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_OUTPUT), 10 + ox, 4 + oy, 400, 23, false);
 		oy += 27;
-		CreateWindowElement(hwnd, ET_STATIC, TEXT("Status: Ready"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_STATUS), 10 + ox, 4 + oy, 400, 45, false);
+		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Status: Ready"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_STATUS), 10 + ox, 4 + oy, 400, 45, false);
 		oy += 79;
-		CreateWindowElement(hwnd, ET_BUTTON, TEXT("Translate"), hInstance, WS_VISIBLE | WS_TABSTOP | BS_FLAT, NULL, HMENU(IDC_BUTTON), 10 + ox, 4 + oy, 400, 30, false);
+		Utils::CreateWindowElement(hwnd, ET_BUTTON, TEXT("Translate"), hInstance, WS_VISIBLE | WS_TABSTOP | BS_FLAT, NULL, HMENU(IDC_BUTTON), 10 + ox, 4 + oy, 400, 30, false);
 
 		//End constructing window
 
@@ -279,12 +279,12 @@ int main()
 		CConfigMgr	config;
 		LPSTR* szArgList;
 		int argCount;
-		szArgList = CommandLineToArgvA(GetCommandLine(), &argCount);
+		szArgList = Utils::CommandLineToArgvA(GetCommandLine(), &argCount);
 
 		if (argCount <= 1)
 			::ShowWindow(::GetConsoleWindow(), SW_HIDE);
 
-		if (!fileExists("config.ini"))
+		if (!Utils::fileExists("config.ini"))
 			Settings::Reset(config);
 		config.Load("config.ini");
 		Settings::Load(config);
