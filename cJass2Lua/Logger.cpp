@@ -101,6 +101,12 @@ namespace _____LOGGER
 
 	Logger::Writer::Writer(std::string file, const std::string& func, int line, Level level, Logger& logger) : _logger(&logger)
 	{
+		if (level == Logger::Level::Clear)
+		{
+			logger.SetOutputFile(__logFileName);
+			return;
+		}
+
 		_writeMutex.lock();
 		if (file.find("/") != std::string::npos)
 			logger._file = file.substr(file.find_last_of("/") + 1, file.length() - 1);

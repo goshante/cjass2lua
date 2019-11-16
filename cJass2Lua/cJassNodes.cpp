@@ -11,6 +11,8 @@
 
 namespace cJass
 {
+	static OperationObject::ConstType g_prevConst = OperationObject::ConstType::Undefined;
+
 	NodePtr Node::Produce(Node::Type type, Node* top, OutputInterface& outIf)
 	{
 		switch (type)
@@ -137,10 +139,13 @@ namespace cJass
 		, _depthIndex(0)
 		, _isBlock(false)
 		, _isComplete(true)
+		, _topIndex(0)
 	{
 		if (top != nullptr)
 		{
 			_depthIndex = top->_depthIndex;
+			if (top->_subnodes.size() > 0)
+				_topIndex = top->_subnodes.size() - 1;
 		}
 	}
 
@@ -176,7 +181,7 @@ namespace cJass
 		_it = _subnodes.begin();
 	}
 
-	Node* Node::Top()
+	Node* Node::Top() const
 	{
 		return _top;
 	}
@@ -193,6 +198,7 @@ namespace cJass
 		if (i >= _subnodes.size())
 			throw std::runtime_error("Node::AtNode: Out of subnode's list boundaries.");
 		
+		_subnodes[i]->_topIndex = i;
 		return _subnodes[i];
 	}
 
@@ -423,6 +429,8 @@ namespace cJass
 		, _unaryExpr(false)
 		, _lambdaIsSingle(false)
 		, _blockClosed(false)
+		, _cType(ConstType::Undefined)
+		, _AssignUnary(false)
 	{
 	}
 
@@ -455,19 +463,33 @@ namespace cJass
 
 		case OpType::Constant:
 			_out << Utils::const2lua(_opText);
+			g_prevConst = _cType;
 			break;
 
 		case OpType::Operator:
-			_out << Utils::op2lua(_opText);
+			_out << Utils::op2lua(_opText, g_prevConst);
 			break;
 
 		case OpType::UnaryOperator:
 			if (!_unaryExpr)
 			{
 				if (_extra == "++")
-					_out << _opText << " = " << _opText << " + 1";
+				{
+					if (_AssignUnary)
+						_out << _opText << " = " << _opText << " + 1";
+					else
+					{
+						_out << "(" << _opText << " + 1" << ")";
+					}
+				}
 				else if (_extra == "--")
-					_out << _opText << " = " << _opText << " - 1";
+				{
+					if (_AssignUnary)
+						_out << _opText << " = " << _opText << " - 1";
+					else
+						_out << "(" << _opText << " - 1" << ")";
+				}
+					
 			}
 			else
 			{
@@ -532,12 +554,33 @@ namespace cJass
 				node->ToLua();
 			break;
 
+		case OpType::DoStatement:
+			_out << "until(";
+			if (_extra == "not")
+				_out << "not(";
+			for (auto& node : _subnodes)
+				node->ToLua();
+			if (_extra == "not")
+				_out << ")";
+			_out << ")";
+			break;
+
+		case OpType::ExitWhen:
+			_out << OutputInterface::nl;
+			PrintTabs();
+			_out << "if ";
+			for (auto& node : _subnodes)
+				node->ToLua();
+			_out << " then break end";
+			break;
+
 		case OpType::Index:
 			_out << "[";
 			if (_subnodes.size() == 1 
 				&& _subnodes[0]->GetType() == Node::Type::OperationObject
 				&& _subnodes[0]->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Constant
-				&& reu::IsMatching(_subnodes[0]->Ptr<OperationObject>()->_opText, "^[0-9]+$"))
+				&& reu::IsMatching(_subnodes[0]->Ptr<OperationObject>()->_opText, "^[0-9]+$")
+				&& !Settings::DoNotIncrementArrayIndexConstants)
 			{
 				itmp = atoi(_subnodes[0]->Ptr<OperationObject>()->_opText.c_str()) + 1;
 				_subnodes[0]->Ptr<OperationObject>()->_opText = std::to_string(itmp);
@@ -630,6 +673,27 @@ namespace cJass
 				node->ToLua();
 			break;
 
+		case OpType::Loop:
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "while true do";
+			for (auto& node : _subnodes)
+				node->ToLua();
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "end";
+			break;
+
+		case OpType::Do:
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "repeat";
+			for (auto& node : _subnodes)
+				node->ToLua();
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			break;
+
 		case OpType::While:
 			_out << OutputInterface::nl;
 			PrintTabs(1);
@@ -642,6 +706,24 @@ namespace cJass
 				node->ToLua();
 				if (i == 0)
 					_out << " do";
+			}
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "end";
+			break;
+
+		case OpType::WhileNot:
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "while not (";
+			if (CountSubnodes() == 0)
+				appLog(Warning) << "'whilenot' without statement!";
+			for (size_t i = 0; i < CountSubnodes(); i++)
+			{
+				auto node = AtNode(i);
+				node->ToLua();
+				if (i == 0)
+					_out << ") do";
 			}
 			_out << OutputInterface::nl;
 			PrintTabs(1);
@@ -695,6 +777,7 @@ namespace cJass
 		case 'C':
 			_otype = OpType::Constant;
 			_opText = strings[1];
+			_cType = Utils::determConstType(_opText);
 			break;
 
 		case 'I':
@@ -724,8 +807,18 @@ namespace cJass
 			_otype = OpType::Argument;
 			break;
 
+		case 'S':
+			_otype = OpType::DoStatement;
+			if (s[1] == 'n')
+				_extra = "not";
+			break;
+
 		case 'r':
 			_otype = OpType::Return;
+			break;
+
+		case 'T':
+			_otype = OpType::ExitWhen;
 			break;
 
 		case 'L':
@@ -750,8 +843,24 @@ namespace cJass
 			_isBlock = true;
 			break;
 
+		case 'P':
+			_otype = OpType::Loop;
+			_depthIndex++;
+			_isBlock = true;
+			break;
+
+		case 'D':
+			_otype = OpType::Do;
+			_depthIndex++;
+			_isBlock = true;
+			break;
+
 		case 'w':
-			_otype = OpType::While;
+			if (s[1] == 'n')
+				_otype = OpType::WhileNot;
+			else
+				_otype = OpType::While;
+			
 			_depthIndex++;
 			_isBlock = true;
 			break;
@@ -776,6 +885,8 @@ namespace cJass
 			_extra = strings[2];
 			if (s[1] == 'e')
 				_unaryExpr = true;
+			else if (s[1] == 'a')
+				_AssignUnary = true;
 			break;
 
 		case 'W':
@@ -794,6 +905,19 @@ namespace cJass
 			appLog(Warning) << "OperationObject::InitData: unknown key.";
 		}
 
+	}
+
+	OperationObject::ConstType OperationObject::PrevConstType()
+	{
+		if (_topIndex == 0)
+			return OperationObject::ConstType::Undefined;
+
+		auto node = _top->AtNode(_topIndex - 1);
+
+		if (node->GetType() != Node::Type::OperationObject)
+			return OperationObject::ConstType::Undefined;
+
+		return node->Ptr<OperationObject>()->_cType;
 	}
 
 	OperationObject::OpType OperationObject::GetOpType() const
@@ -841,12 +965,12 @@ namespace cJass
 		std::vector<std::shared_ptr<Node>> nv;
 		for (size_t i = 0; i < _vars.size(); i++)
 		{
-			if (_subnodes[i]->CountSubnodes() != 0 || _arrSizes[i] != "")
+			if (AtNode(i)->CountSubnodes() != 0 || _arrSizes[i] != "")
 			{
 
 				auto v = _vars[i];
 				auto a = _arrSizes[i];
-				auto n = _subnodes[i];
+				auto n = AtNode(i);
 
 				vv.push_back(v);
 				av.push_back(a);
@@ -856,12 +980,12 @@ namespace cJass
 
 		for (size_t i = 0; i < _vars.size(); i++)
 		{
-			if (_subnodes[i]->CountSubnodes() == 0 && _arrSizes[i] == "")
+			if (AtNode(i)->CountSubnodes() == 0 && _arrSizes[i] == "")
 			{
 
 				auto v = _vars[i];
 				auto a = _arrSizes[i];
-				auto n = _subnodes[i];
+				auto n = AtNode(i);
 
 				vv.push_back(v);
 				av.push_back(a);
