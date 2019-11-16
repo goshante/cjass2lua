@@ -1,6 +1,7 @@
 #include "cJassNodes.h"
 #include "reutils.h"
 #include "Settings.h"
+#include <cmath>
 
 #define d if (1 == 2) \
 
@@ -243,7 +244,7 @@ namespace cJass
 		, _globals({})
 	{
 	}
-
+	
 	void GlobalSpace::ToLua() 
 	{
 		for (auto& var : _globals)
@@ -338,6 +339,11 @@ namespace cJass
 			_out << "--[[" << OutputInterface::nl << tmp << OutputInterface::nl << "]]--" << OutputInterface::nl;
 		else
 			_out << "-- " << tmp;
+
+		if (Top() == nullptr)
+		{
+			_out << OutputInterface::nl;
+		}
 	}
 
 	void Comment::InitData(const std::vector<std::string>& strings)
@@ -440,33 +446,18 @@ namespace cJass
 
 	int rawCodeToInt(std::string code)
 	{
-		if (code.find("'") != std::string::npos)
-			code = reu::IndexSubstr(code, 1, code.length() - 1);
-
-		auto char2Id = [](char c) -> int
-		{
-			int i = 0;
-			std::string abc = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-			char t;
-
-			do
-			{
-				t = abc[i];
-				i++;
-			} while (t != '\0' && t != c);
-
-			if (i < 10)
-				return i + 48;
-			else if (i < 36)
-				return i + 65 - 10;
-
-			return i + 97 - 36;
-		};
+		auto match = reu::Search(code, "^'(.*)'$");
+		if (match.IsMatching())
+			code = match[1];
 
 		int n = 0;
-
-		for (char& c : code)
-			n += char2Id(c) * 256;
+		int p = 0;
+		for (auto it = code.rbegin(); it != code.rend(); it++)
+		{
+			char c = *it;
+			n += c * int(pow(256, p));
+			p++;
+		}
 		
 		return n;
 	}

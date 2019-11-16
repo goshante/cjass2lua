@@ -21,12 +21,16 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 - Macroses. Only constants, function and variable shorters. Macroses are translated into global variables.
 
 ### Latest release
-*In development...*
+- [v1.00](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.00)
 
 ### Manual
+#### GUI
 1. Enter destination path of cJass text file (or folder with cJass files)
 2. Enter destination path of output Lua file (or folder) to save Lua file(s)
 3. Click Translate
+#### Console
+- First argument is input file or folder (necessary)
+- Second argument is output file or folder (optional)
 
 ### Config options description
 - ConvertRawCodes - Can be TRUE or FALSE. If TRUE - converts raw codes (such as 'A0D3' or 'I0AX') in corresponding integers. If FALSE wraps raw code into FourCC() Lua call.

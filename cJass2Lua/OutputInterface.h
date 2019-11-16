@@ -57,6 +57,7 @@ public:
 	virtual ~OutputInterface(){}
 
 	bool IsReady() const;
+	void Close();
 	void SetOutputFile(const std::string& fname);
 
 	OutputInterface& operator<<(const std::string& str);

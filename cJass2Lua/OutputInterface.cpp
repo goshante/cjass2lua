@@ -111,10 +111,15 @@ bool OutputInterface::IsReady() const
 
 void OutputInterface::SetOutputFile(const std::string& fname)
 {
-	_file.reset();
+	Close();
 	HANDLE hFile = CreateFileA(fname.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
 		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, NULL);
 	if (hFile == 0 || hFile == HANDLE(~0))
 		throw std::runtime_error("OutputInterface::OutputInterface: Cannot open file " + fname + " for writing.");
 	_file = std::shared_ptr<WinHandle>(new WinHandle(hFile));
+}
+
+void OutputInterface::Close()
+{
+	_file.reset();
 }
