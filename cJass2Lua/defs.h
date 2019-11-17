@@ -11,7 +11,7 @@
 #pragma warning(disable : 4834)
 
 
-#define APP_VER		"1.03"
+#define APP_VER		"1.03b"
 #ifdef _WIN64
 #define APP_BUILD	"x64"
 #else
