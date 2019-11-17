@@ -713,7 +713,7 @@ namespace cJass
 						goto parseWordEnd;
 					}
 
-					if (_word != "")
+					if (_word != "" && _word != "(")
 						vec_arg.push_back(_word);
 				}
 				else if (subjectStack.top() == ParseSpecialSubject::none)

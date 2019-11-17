@@ -33,7 +33,7 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 - Pre-increments or post-increments are supported and can be used in expressions, but for example a = i++ will be converted into a = (i + 1) and i will not be incremented. In this cases you need to increment it manually.
 
 ### Latest release
-- [v1.03](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.03)
+- [v1.03b](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.03b)
 
 ### Manual
 #### GUI
