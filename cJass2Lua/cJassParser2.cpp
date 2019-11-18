@@ -435,6 +435,9 @@ namespace cJass
 			static std::stack<bool>			unclosedOpStack;
 			static std::string				preUnary;
 			static bool						statementNeedsClosing = false;
+			static bool						globalArr = false;
+			static std::string				localType = "";
+			static Node*					funcNode = nullptr;
 
 			if (clearStatic)
 			{
@@ -458,6 +461,9 @@ namespace cJass
 				stack_clear(allowWrappersStack);
 				stack_clear(varAddedStack);
 				stack_clear(unclosedOpStack);
+				globalArr = false;
+				localType = "";
+				funcNode = nullptr;
 				return;
 			}
 			
@@ -635,31 +641,53 @@ namespace cJass
 						appLog(Debug) << "End parsing globals";
 						subjectStack.pop();
 						vec_arg.clear();
+						globalArr = false;
 						goto parseWordEnd;
 					}
 
+					if (_word == "]")
+					{
+						globalArr = false;
+						goto parseWordEnd;
+					}
+						
+					if (globalArr)
+						goto parseWordEnd;
+
+					
 					if (vec_arg.size() == 2)
 					{
+						if (_word == "[")
+						{
+							globalArr = true;
+							vec_arg.push_back("{}");
+							if (vec_arg[0] == "string")
+								_rootNode.InsertStringId(vec_arg[1]);
+							_rootNode.InitData(vec_arg);
+							vec_arg.clear();
+							goto parseWordEnd;
+						}
+
 						if (globalVarDeclaration)
 						{
-							if (_word == ";")
-								vec_arg.push_back("");
-							else
-								vec_arg.push_back(_word);
+							vec_arg.push_back(_word);
+							if (vec_arg[0] == "string")
+								_rootNode.InsertStringId(vec_arg[1]);
 							_rootNode.InitData(vec_arg);
 							vec_arg.clear();
 							globalVarDeclaration = false;
 							goto parseWordEnd;
 						}
-						else
-						{
-							vec_arg.push_back("");
-							_rootNode.InitData(vec_arg);
-							vec_arg.clear();
-							if (_word != ";")
-								vec_arg.push_back(_word);
-							goto parseWordEnd;
-						}
+						
+						vec_arg.push_back("");
+						if (vec_arg[0] == "string")
+							_rootNode.InsertStringId(vec_arg[1]);
+						_rootNode.InitData(vec_arg);
+						vec_arg.clear();
+						if (_word != ";")
+							vec_arg.push_back(_word);
+						globalVarDeclaration = false;
+						goto parseWordEnd;
 					}
 					else if (_word != ";")
 						vec_arg.push_back(_word);
@@ -691,6 +719,8 @@ namespace cJass
 						
 					if (globalVarDeclaration && wtype == word_t::nl)
 					{
+						if (vec_arg[2].find("\"") != std::string::npos)
+							_rootNode.InsertStringId(vec_arg[1]);
 						_rootNode.InitData(vec_arg);
 						vec_arg.clear();
 						globalVarDeclaration = false;
@@ -704,11 +734,14 @@ namespace cJass
 					{
 						appLog(Debug) << "Parsing function" << vec_arg[1];
 						_addNode(Node::Type::Function, vec_arg, true);
+						funcNode = _activeNode;
 						subjectStack.pop();
 						wrapperStateStack.push(false);
 						allowWrappersStack.push(true);
 						varAddedStack.push(false);
 						unclosedOpStack.push(false);
+						if (vec_arg[0] == "string")
+							_rootNode.InsertStringId(vec_arg[1]);
 						vec_arg.clear();
 						goto parseWordEnd;
 					}
@@ -805,6 +838,8 @@ namespace cJass
 					if (isLocalTop && !varAddedStack.top())
 					{
 						varName = _word;
+						if (localType == "string")
+							funcNode->Ptr<Function>()->InsertStringId(varName);
 					}
 					else
 					{
@@ -873,6 +908,7 @@ namespace cJass
 					else
 					{
 						_addNode(Node::Type::LocalDeclaration, { _word }, true);
+						localType = _word;
 						bstack_set_top(varAddedStack, false);
 						bstack_set_top(allowWrappersStack, false);
 						bstack_set_top(unclosedOpStack, true);
@@ -1222,6 +1258,8 @@ namespace cJass
 							bstack_set_top(allowWrappersStack, true);
 						}
 
+						localType = "";
+
 						if (_activeNode->GetType() == Node::Type::OperationObject
 							&&  (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return
 								|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::ExitWhen
@@ -1264,6 +1302,8 @@ namespace cJass
 						_pop();
 						isLocalTop = true;
 					}
+
+					localType = "";
 						
 					if (isLocalTop)
 					{
@@ -1309,16 +1349,22 @@ namespace cJass
 				case word_t::blockEnd:
 					if (_activeNode->GetType() == Node::Type::OperationObject)
 						_activeNode->Ptr<OperationObject>()->CloseBlock();
+					if (_depth() == 1)
+					{
+						if (_activeNode->GetType() != Node::Type::Function)
+							throw std::runtime_error("Top node must be function, but it is not!");
+						funcNode = nullptr;
+						appLog(Debug) << "End parsing function";
+					}
 					_pop();
 					wrapperStateStack.pop();
 					allowWrappersStack.pop();
 					varAddedStack.pop();
 					unclosedOpStack.pop();
-					if (_activeNode->GetDepth() == 0)
-						appLog(Debug) << "End parsing function";
 					break;
 
 				case word_t::ignore:
+					appLog(Debug) << "Ignoring" << _word;
 					break;
 
 				case word_t::undefined:

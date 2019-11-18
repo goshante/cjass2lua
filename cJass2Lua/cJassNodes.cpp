@@ -140,6 +140,7 @@ namespace cJass
 		, _isBlock(false)
 		, _isComplete(true)
 		, _topIndex(0)
+		, _isString(false)
 	{
 		if (top != nullptr)
 		{
@@ -157,6 +158,10 @@ namespace cJass
 	{
 		if (node->_depthIndex == 0)
 			node->_depthIndex = _depthIndex + 1;
+		
+		if (_isString)
+			node->_isString = true;
+
 		_subnodes.push_back(node);
 		ResetIterator();
 	}
@@ -233,6 +238,11 @@ namespace cJass
 		_isComplete = isComplete;
 	}
 
+	bool Node::IsString() const
+	{
+		return _isString;
+	}
+
 	GlobalSpace::GlobalSpace(OutputInterface& outIf)
 		: Node(outIf, Node::Type::GlobalSpace, nullptr)
 		, _globals({})
@@ -290,7 +300,23 @@ namespace cJass
 		_tabs = 0;
 		_subnodes.clear();
 		_globals.clear();
+		_strIds.clear();
 		ResetIterator();
+	}
+
+	void GlobalSpace::InsertStringId(const std::string& str)
+	{
+		_strIds.push_back(str);
+	}
+
+	bool GlobalSpace::HasStringId(const std::string& strId) const
+	{
+		for (const auto& str : _strIds)
+		{
+			if (str == strId)
+				return true;
+		}
+		return false;
 	}
 
 	Comment::Comment(OutputInterface& outIf, Node* top)
@@ -415,9 +441,57 @@ namespace cJass
 		_returnType = strings[0];
 		_name = strings[1];
 		_depthIndex++;
+		bool insStr = false;
 
 		for (size_t i = 2; i < size; i++)
+		{
 			_args.push_back(strings[i]);
+			if (i % 2 == 0 && strings[i] == "string")
+				insStr = true;
+			if (i % 2 != 0 && insStr)
+			{
+				_strIds.push_back(strings[i]);
+				insStr = false;
+			}
+		}
+			
+	}
+
+	void Function::InsertStringId(const std::string& strId)
+	{
+		_strIds.push_back(strId);
+	}
+
+	bool Function::HasStringId(const std::string& strId) const
+	{
+		for (const auto& str : _strIds)
+		{
+			if (str == strId)
+				return true;
+		}
+		return false;
+	}
+
+	bool OperationObject::CheckIsString()
+	{
+		auto top = _top;
+		while (top->Top() != nullptr)
+			top = top->Top();
+		if (top->Ptr<GlobalSpace>()->HasStringId(_opText))
+			return true;
+		else
+		{
+			top = Top();
+			while (top->Top() != nullptr && top->Top()->GetType() == Node::Type::Function)
+				top = top->Top();
+			if (top->GetType() == Node::Type::Function)
+			{
+				if (top->Ptr<Function>()->HasStringId(_opText))
+					return true;
+			}
+		}
+
+		return false;
 	}
 
 	OperationObject::OperationObject(OutputInterface& outIf, Node* top)
@@ -467,7 +541,7 @@ namespace cJass
 			break;
 
 		case OpType::Operator:
-			_out << Utils::op2lua(_opText, g_prevConst);
+			_out << Utils::op2lua(_opText, HasNeighbourStrings());
 			break;
 
 		case OpType::UnaryOperator:
@@ -493,7 +567,10 @@ namespace cJass
 			}
 			else
 			{
-				_out << _opText << " = " << _opText << std::string({ ' ', _extra[0], ' ' });
+				if (!_isString)
+					_out << _opText << " = " << _opText << std::string({ ' ', _extra[0], ' ' });
+				else
+					_out << _opText << " = " << _opText << " .. ";
 				for (auto& node : _subnodes)
 					node->ToLua();
 			}
@@ -754,6 +831,7 @@ namespace cJass
 	void OperationObject::InitData(const std::vector<std::string>& strings)
 	{
 		size_t size = strings.size();
+		Node* top = _top;
 		
 		if (size == 0 || size > 3)
 		{
@@ -778,11 +856,15 @@ namespace cJass
 			_otype = OpType::Constant;
 			_opText = strings[1];
 			_cType = Utils::determConstType(_opText);
+			if (_cType == ConstType::String)
+				_isString = true;
+			
 			break;
 
 		case 'I':
 			_otype = OpType::Id;
 			_opText = strings[1];
+			_isString = CheckIsString();
 			break;
 
 		case 'x':
@@ -887,6 +969,7 @@ namespace cJass
 				_unaryExpr = true;
 			else if (s[1] == 'a')
 				_AssignUnary = true;
+			_isString = CheckIsString();
 			break;
 
 		case 'W':
@@ -907,17 +990,40 @@ namespace cJass
 
 	}
 
-	OperationObject::ConstType OperationObject::PrevConstType()
+	bool  OperationObject::HasNeighbourStrings()
 	{
-		if (_topIndex == 0)
-			return OperationObject::ConstType::Undefined;
+		Node* top = _top;
+		size_t this_index = std::string::npos;
 
-		auto node = _top->AtNode(_topIndex - 1);
+		if (top->IsString())
+			return true;
 
-		if (node->GetType() != Node::Type::OperationObject)
-			return OperationObject::ConstType::Undefined;
+		for (size_t i = 0; i < top->CountSubnodes(); i++)
+		{
+			auto node = top->AtNode(i);
 
-		return node->Ptr<OperationObject>()->_cType;
+			if (node->Ptr() == dynamic_cast<Node*>(this))
+			{
+				this_index = i;
+				break;
+			}
+		}
+
+		if (this_index != std::string::npos)
+		{
+			for (size_t i = 0; i < top->CountSubnodes(); i++)
+			{
+				auto node = top->AtNode(i);
+
+				if (i == this_index - 1 || i == this_index + 1)
+				{
+					if (node->IsString())
+						return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	OperationObject::OpType OperationObject::GetOpType() const
@@ -1029,6 +1135,8 @@ namespace cJass
 	{
 		appLog(Debug) << "LocalDeclaration::InitData Args:" << strings;
 		_type == strings[0];
+		if (_type == "string")
+			_isString = true;
 	}
 
 	size_t LocalDeclaration::GetVarCount() const
