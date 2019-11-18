@@ -31,6 +31,7 @@ namespace Utils
 	HWND CreateWindowElement(HWND Parent, UINT Type, const char* Title, HINSTANCE hInst, DWORD Style, DWORD StyleEx, HMENU ElementID, INT pos_x, INT pos_y, INT Width, INT Height, BOOL NewRadioGroup);
 	char** CommandLineToArgvA(char* CmdLine, int* _argc);
 	std::string op2lua(const std::string& op, cJass::OperationObject::ConstType prevType = cJass::OperationObject::ConstType::Undefined);
+	std::string op2lua(const std::string& op, bool isString = false);
 	int rawCodeToInt(std::string code);
 	std::string const2lua(const std::string& cnst);
 	cJass::OperationObject::ConstType determConstType(const std::string& cjConst);

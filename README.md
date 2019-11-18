@@ -8,6 +8,10 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 - Analyzing and syntax checking cJass code
 - Producing .lua file with converted code of your cJass code
 - Single file conversion
+- Smart string decection (constants, locals, globals, declared functions) and smart replacing string concatenation operator
+- Supports some JASS syntax as condition expressions without `()`, `if ... then`. Keywords `local`, `set`, `call`, `array` can be used normally or not used at all. Loops supported: `while`, `do ... while`, `whilenot`, `do ... whilenot`, `loop / exitwhen`
+- Lambdas
+- Define macroses with expressions
 - Massive folder-to-folder conversion
 - Advanced logging of application
 - Opportunity to implement output for any other script language
@@ -18,22 +22,22 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 - Command line interface
 
 ### Unsupported features
-- Analyzing classes/structures and converting them to Lua meta table implementation
+- Analyzing classes/structures and converting them to Lua meta table implementation (Planned to be implemented soon)
 - JASS/vJASS Syntax
 - Pre-processor directives
 - Macroses. Only constants, function and variable shorters. Macroses are translated into global variables.
 
 ### Pay attention to this before translating your code
 - Your code is 100% correct
-- Array indexes in Lua are starting from 1, not from 0 and no way to fix it automatically. BUT all single integer indexes are incremented by 1. All variables and condition must be fixes manually.
+- Array indexes in Lua started from 1 in some cases. Just note that.
 - You have no objects or classes/structures
-- You have no JASS syntax (as loop/andloop, if/else and function definition). But some vJass features added (; is not necessary, set, local, call keywords are parsed correctly. 
-- Read logs if something foes wrong, this application leaves cjass2lua.log file with all it's actions and possible problems. Everything should be fine if you have no warnings.
-- String concatecation in Lua is done with '..' operator instead of '+'. In some cases cJass2Lua is able to replace it, but in most cases it should be fixed manually.
-- Pre-increments or post-increments are supported and can be used in expressions, but for example a = i++ will be converted into a = (i + 1) and i will not be incremented. In this cases you need to increment it manually.
+- You have no JASS syntax function and block declaration. Use only C style definition as `unit Function(integer arg)` and C style block definition with `{ ... }`, do not use such words as `endfunction`, `endloop` etc.
+- String concatecation operator `+` in JASS normally should be replaced with `..` but string globals or functions defined beyond current file are unknown. And in this some cases with unknown in current context string globals or functions operator `+` will be not replaced.
+- Pre-increments or post-increments are supported and can be used in expressions, but for example `a = i++` will be converted into `a = (i + 1)` and `i` will not be incremented. In this cases you need to increment it manually.
+- Read logs if something goes wrong, this application leaves cjass2lua.log file with all it's actions and possible problems. Everything should be fine if you have no warnings.
 
 ### Latest release
-- [v1.03b](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.03b)
+- [v1.04](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.04)
 
 ### Manual
 #### GUI

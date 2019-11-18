@@ -273,6 +273,26 @@ namespace Utils
 		return " " + op + " ";
 	}
 
+	std::string op2lua(const std::string& op, bool isString)
+	{
+		if (op == "&&")
+			return " and ";
+		else if (op == "+" && isString)
+			return " .. ";
+		else if (op == "||")
+			return " or ";
+		else if (op == "!")
+			return " not ";
+		else if (op == "!=")
+			return " ~= ";
+		else if (op == "++" || op == "--" || op == "+=" || op == "-=" || op == "*=" || op == "/=")
+			return "";
+		if (op == "dig_minus")
+			return "-";
+
+		return " " + op + " ";
+	}
+
 	int rawCodeToInt(std::string code)
 	{
 		auto match = reu::Search(code, "^'(.*)'$");

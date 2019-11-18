@@ -30,7 +30,7 @@ namespace Settings
 	bool									IgnoreComments = false;
 	bool									ConvertRawCodes = false;
 	bool									ClearLogsOnNewTranslate = false;
-	extern bool								DoNotIncrementArrayIndexConstants = false;
+	bool									DoNotIncrementArrayIndexConstants = true;
 	OutputInterface::NewLineType			OutputNewLineType = OutputInterface::NewLineType::CRLF;
 	std::string								OutputLanguage = "Lua";
 	_____LOGGER::Logger::Level				LogLevel = LOGLVL(Debug);
@@ -43,7 +43,7 @@ namespace Settings
 		Settings::IgnoreComments = config.GetValue_Bool("Settings", "IgnoreComments", false);
 		Settings::ConvertRawCodes = config.GetValue_Bool("Settings", "ConvertRawCodes", false);
 		Settings::ClearLogsOnNewTranslate = config.GetValue_Bool("Settings", "ClearLogsOnNewTranslate", false);
-		Settings::DoNotIncrementArrayIndexConstants = config.GetValue_Bool("Settings", "DoNotIncrementArrayIndexConstants", false);
+		Settings::DoNotIncrementArrayIndexConstants = config.GetValue_Bool("Settings", "DoNotIncrementArrayIndexConstants", true);
 		std::string nlType = config.GetValue_Str("Settings", "OutputNewLineType", "CRLF");
 		Settings::OutputLanguage = config.GetValue_Str("Settings", "OutputLanguage", "Lua");
 		Settings::LogLevel = static_cast<_____LOGGER::Logger::Level>(config.GetValue_Num<int>("Settings", "LogLevel", 0));
@@ -82,7 +82,7 @@ namespace Settings
 		config.SetValue_Bool("Settings", "IgnoreComments", false);
 		config.SetValue_Bool("Settings", "ConvertRawCodes", false);
 		config.SetValue_Bool("Settings", "ClearLogsOnNewTranslate", false);
-		config.SetValue_Bool("Settings", "DoNotIncrementArrayIndexConstants", false);
+		config.SetValue_Bool("Settings", "DoNotIncrementArrayIndexConstants", true);
 		config.SetValue_Str("Settings", "OutputNewLineType", "CRLF");
 		config.SetValue_Str("Settings", "OutputLanguage", "Lua");
 		config.SetValue_Num<int>("Settings", "LogLevel", 0);

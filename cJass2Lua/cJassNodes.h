@@ -38,6 +38,7 @@ namespace cJass
 		bool				_isComplete;
 		size_t				_topIndex;
 		Node*				_top;
+		bool				_isString;
 
 	private:
 		Type				_type;
@@ -64,6 +65,7 @@ namespace cJass
 		bool IsBlock() const;
 		bool IsComplete() const;
 		void Complete(bool isComplete);
+		bool IsString() const;
 
 		NodePtr IterateSubnodes();
 		NodePtr AtNode(size_t i);
@@ -76,12 +78,15 @@ namespace cJass
 	class GlobalSpace : public Node
 	{
 	private:
-		std::vector<variable_t> _globals;
-
+		std::vector<variable_t>		_globals;
+		std::vector<std::string>	_strIds;
+		 
 	public:
 		GlobalSpace(OutputInterface& outIf);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
+		void InsertStringId(const std::string& strId);
+		bool HasStringId(const std::string& str) const;
 		void Clear();
 	};
 
@@ -102,11 +107,14 @@ namespace cJass
 		std::string					_name;
 		std::string					_returnType;
 		std::vector<std::string>	_args;
+		std::vector<std::string>	_strIds;
 
 	public:
 		Function(OutputInterface& outIf, Node* top);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
+		void InsertStringId(const std::string& strId);
+		bool HasStringId(const std::string& strId) const;
 	};
 
 	class OperationObject : public Node
@@ -179,7 +187,8 @@ namespace cJass
 		bool LambdaIsSingle() const;
 		bool BlockClosed() const;
 		void CloseBlock();
-		ConstType PrevConstType();
+		bool CheckIsString();
+		bool HasNeighbourStrings();
 	};
 
 	class LocalDeclaration : public Node
