@@ -257,6 +257,8 @@ namespace Utils
 	{
 		if (op == "&&")
 			return " and ";
+		else if (op == "." || op == ":")
+			return op;
 		else if (op == "+" && prevType == cJass::OperationObject::ConstType::String)
 			return " .. ";
 		else if (op == "||")
@@ -277,6 +279,8 @@ namespace Utils
 	{
 		if (op == "&&")
 			return " and ";
+		else if (op == "." || op == ":")
+			return op;
 		else if (op == "+" && isString)
 			return " .. ";
 		else if (op == "||")

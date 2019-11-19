@@ -84,7 +84,11 @@ namespace _____LOGGER
 	};
 
 #ifdef _LOGGER_MAIN_CPP
+#ifndef _DEBUG
 	Logger ___Logger(OutputInterface::Type::File, __logFileName);
+#else
+	Logger ___Logger(OutputInterface::Type::Console, __logFileName);
+#endif
 #else
 	extern Logger ___Logger;
 #endif

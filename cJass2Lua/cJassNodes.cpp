@@ -119,8 +119,24 @@ namespace cJass
 				res += "Logic";
 				break;
 
+			case OperationObject::OpType::WhileNot:
+				res += "WhileNot";
+				break;
+
+			case OperationObject::OpType::Do:
+				res += "Do";
+				break;
+
+			case OperationObject::OpType::DoStatement:
+				res += "DoStatement";
+				break;
+
+			case OperationObject::OpType::ExitWhen:
+				res += "ExitWhen";
+				break;
+
 			default:
-				return "Unknown";
+				res += "Unknown";
 			}
 			res += ")";
 			return res;
@@ -158,9 +174,6 @@ namespace cJass
 	{
 		if (node->_depthIndex == 0)
 			node->_depthIndex = _depthIndex + 1;
-		
-		if (_isString)
-			node->_isString = true;
 
 		_subnodes.push_back(node);
 		ResetIterator();
@@ -360,7 +373,7 @@ namespace cJass
 		else
 			_out << "-- " << tmp;
 
-		if (Top() == nullptr)
+		if (Top()->Top() == nullptr)
 		{
 			_out << OutputInterface::nl;
 		}
@@ -632,14 +645,13 @@ namespace cJass
 			break;
 
 		case OpType::DoStatement:
-			_out << "until(";
+			_out << "until ";
 			if (_extra == "not")
-				_out << "not(";
+				_out << "not( ";
 			for (auto& node : _subnodes)
 				node->ToLua();
 			if (_extra == "not")
-				_out << ")";
-			_out << ")";
+				_out << " )";
 			break;
 
 		case OpType::ExitWhen:
@@ -792,7 +804,7 @@ namespace cJass
 		case OpType::WhileNot:
 			_out << OutputInterface::nl;
 			PrintTabs(1);
-			_out << "while not (";
+			_out << "while not ( ";
 			if (CountSubnodes() == 0)
 				appLog(Warning) << "'whilenot' without statement!";
 			for (size_t i = 0; i < CountSubnodes(); i++)
@@ -800,7 +812,7 @@ namespace cJass
 				auto node = AtNode(i);
 				node->ToLua();
 				if (i == 0)
-					_out << ") do";
+					_out << " ) do";
 			}
 			_out << OutputInterface::nl;
 			PrintTabs(1);
@@ -993,35 +1005,96 @@ namespace cJass
 	bool  OperationObject::HasNeighbourStrings()
 	{
 		Node* top = _top;
-		size_t this_index = std::string::npos;
+		size_t this_index = 9999999;
 
 		if (top->IsString())
 			return true;
 
+		std::vector<std::string> neighbours;
 		for (size_t i = 0; i < top->CountSubnodes(); i++)
 		{
 			auto node = top->AtNode(i);
 
-			if (node->Ptr() == dynamic_cast<Node*>(this))
+			if (i > this_index + 1)
+				break;
+
+			if (node->Ptr() == dynamic_cast<Node*>(this) && this_index == 9999999)
 			{
 				this_index = i;
+				if (i > 0)
+					i--;
+			}
+
+			if (i == this_index - 1)
+			{
+				node = top->AtNode(i);
+				if (node->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Index)
+				{
+					for (int j = int(i); j >= 0; j--)
+					{
+						node = top->AtNode(j);
+						if (node->Ptr<OperationObject>()->GetOpType() != OperationObject::OpType::Index)
+						{
+							neighbours.push_back(node->Ptr<OperationObject>()->_opText);
+							continue;
+						}
+					}
+				}
+				else
+					neighbours.push_back(node->Ptr<OperationObject>()->_opText);
+			}
+
+			if (i == this_index + 1)
+			{
+				node = top->AtNode(i);
+				neighbours.push_back(node->Ptr<OperationObject>()->_opText);
+			}
+		}
+
+		Function* fnode = nullptr;
+		GlobalSpace* gspace = nullptr;
+
+		top = this;
+		while (top != nullptr)
+		{
+			if (top->GetType() == Node::Type::Function)
+			{
+				fnode = top->Ptr<Function>();
 				break;
 			}
+			top = top->Top();
 		}
 
-		if (this_index != std::string::npos)
+		top = _top;
+		while (top != nullptr)
 		{
-			for (size_t i = 0; i < top->CountSubnodes(); i++)
+			if (top->Top() == nullptr)
 			{
-				auto node = top->AtNode(i);
+				gspace = top->Ptr<GlobalSpace>();
+				break;
+			}
+			top = top->Top();
+		}
 
-				if (i == this_index - 1 || i == this_index + 1)
-				{
-					if (node->IsString())
-						return true;
-				}
+		if (fnode != nullptr)
+		{
+			for (auto n : neighbours)
+			{
+				if (n != "" && fnode->HasStringId(n))
+					return true;
 			}
 		}
+
+		if (gspace != nullptr)
+		{
+			for (auto n : neighbours)
+			{
+				if (n != "" && gspace->HasStringId(n))
+					return true;
+			}
+		}
+		else
+			appLog(Critical) << "OperationObject::HasNeighbourStrings: Root node not found.";
 
 		return false;
 	}
