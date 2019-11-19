@@ -280,14 +280,16 @@ int main()
 {
 	try
 	{
-		appLog(Info) << "Starting cJass2Lua application (version" << APP_VER << "/" << APP_BUILD << ")";
+		appLog(Info) << "Starting cJass2Lua application ( version" << APP_VER << "/" << APP_BUILD << ")";
 		std::cout << std::string("cJass2Lua v") + APP_VER + " " + APP_BUILD << std::endl;
 		LPSTR* szArgList;
 		int argCount;
 		szArgList = Utils::CommandLineToArgvA(GetCommandLine(), &argCount);
 
+#ifndef _DEBUG
 		if (argCount <= 1)
 			::ShowWindow(::GetConsoleWindow(), SW_HIDE);
+#endif
 
 		if (!Utils::fileExists("config.ini"))
 			Settings::Reset();
@@ -309,6 +311,7 @@ int main()
 				out = szArgList[2];
 			std::cout << "Starting parser..." << std::endl;
 			parse_thisThread(szArgList[1], out);
+			system("pause");
 			return 0;
 		}
 		else

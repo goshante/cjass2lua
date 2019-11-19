@@ -1,15 +1,16 @@
 # cJass2Lua
-## Useful converter from cJass to Lua for Warcraft III scripts
+## Useful converter from cJass/JASS to Lua for Warcraft III scripts
 
 ## Description
-Warcraft III Reforged brought us lua scripting, but still a lot of map makers for WC3 are using cJass. Just because C-style syntax rules. Unfortunately cJass extension is unsupported for Reforged and who knows how it will be. Lua is more efficient, useful and simple for game development. But a lot of projects are still on cJass and no way to convert them to Lua. Editor without cJass extension does not perceive this code. Re-writing code manually to Lua could take a lot of time, nobody wants to waste time on it. This tool comes to solve this problem. cjass2lua tool can easily convert cJass to readable Lua code, it will help you to upgrade your map by modern map development patterns.
+Warcraft III Reforged brought us Lua scripting, but still a lot of map makers for WC3 are using JASS and cJass. JASS is because it's a standard and cJass just because C-style syntax rules. Unfortunately cJass extension is unsupported for Reforged and who knows how it will be. And JASS becomes deprecated. Lua is more efficient, useful and simple for game development. But a lot of projects are still on cJass/JASS and no way to convert them to Lua. Editor without cJass extension does not perceive this code. Re-writing code manually to Lua could take a lot of time, nobody wants to waste time on it. This tool comes to solve this problem. cjass2lua tool can easily convert cJass and JASS to readable Lua code, it will help you to upgrade your map by modern map development patterns. 
 
 ### Features
 - Analyzing and syntax checking cJass code
-- Producing .lua file with converted code of your cJass code
+- Full support of JASS/cJASS
+- Producing .lua file with converted code of your cJass/JASS code
 - Single file conversion
 - Smart string decection (constants, locals, globals, declared functions) and smart replacing string concatenation operator
-- Supports some JASS syntax as condition expressions without `()`, `if ... then`. Keywords `local`, `set`, `call`, `array` can be used normally or not used at all. Loops supported: `while`, `do ... while`, `whilenot`, `do ... whilenot`, `loop / exitwhen`
+- Supports mixed code of cJass/JASS. It is fully recognizable.
 - Lambdas
 - Define macroses with expressions
 - Massive folder-to-folder conversion
@@ -23,21 +24,20 @@ Warcraft III Reforged brought us lua scripting, but still a lot of map makers fo
 
 ### Unsupported features
 - Analyzing classes/structures and converting them to Lua meta table implementation (Planned to be implemented soon)
-- JASS/vJASS Syntax
+- vJASS features as scopes, modules, etc. are unsupported (and have no sense in Lua)
 - Pre-processor directives
-- Macroses. Only constants, function and variable shorters. Macroses are translated into global variables.
+- Macroses. Only constants and expression defines, function and variable shorters. Macroses are translated into global variables.
 
 ### Pay attention to this before translating your code
 - Your code is 100% correct
 - Array indexes in Lua started from 1 in some cases. Just note that.
 - You have no objects or classes/structures
-- You have no JASS syntax function and block declaration. Use only C style definition as `unit Function(integer arg)` and C style block definition with `{ ... }`, do not use such words as `endfunction`, `endloop` etc.
 - String concatecation operator `+` in JASS normally should be replaced with `..` but string globals or functions defined beyond current file are unknown. And in this some cases with unknown in current context string globals or functions operator `+` will be not replaced.
 - Pre-increments or post-increments are supported and can be used in expressions, but for example `a = i++` will be converted into `a = (i + 1)` and `i` will not be incremented. In this cases you need to increment it manually.
 - Read logs if something goes wrong, this application leaves cjass2lua.log file with all it's actions and possible problems. Everything should be fine if you have no warnings.
 
 ### Latest release
-- [v1.04](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.04)
+- [v1.05](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.05)
 
 ### Manual
 #### GUI

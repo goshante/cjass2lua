@@ -11,7 +11,7 @@
 #pragma warning(disable : 4834)
 
 
-#define APP_VER		"1.04"
+#define APP_VER		"1.05"
 #ifdef _WIN64
 #define APP_BUILD	"x64"
 #else
@@ -63,6 +63,7 @@ namespace cJass
 		retn,
 		lambda,
 		op,
+		dot,
 		unary,
 		unaryExpr,
 		constant,
@@ -84,7 +85,14 @@ namespace cJass
 		whilenot,
 		then,
 		exitwhen,
-		loop
+		loop,
+		function,
+		endfunction,
+		endif,
+		endloop,
+		takes,
+		returns,
+		array
 	};
 
 	enum class ParseSpecialSubject
@@ -93,6 +101,7 @@ namespace cJass
 		globals,
 		defs,
 		func,
+		vjass_func,
 		call
 	};
 }

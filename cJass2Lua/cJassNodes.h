@@ -129,12 +129,12 @@ namespace cJass
 			Constant,
 			Operator,
 			UnaryOperator,
-			Return,
 			NewLine,
+
+			//Expressions
 			ExitWhen,
 			DoStatement,
-			
-			//Expressions
+			Return,
 			Expression,			//General expression in () brackets or without them
 			Call,				//Function call
 			Index,				//Array index expression [] (not definition)
