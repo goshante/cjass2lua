@@ -3,6 +3,7 @@
 #include "defs.h"
 #include <memory>
 #include <Windows.h>
+#include <functional>
 
 #include "OutputInterface.h"
 
@@ -21,12 +22,18 @@ namespace cJass
 		enum class Type
 		{
 			Undefined,
-			GlobalSpace,
+			RootNode,
 			Function,
 			Comment,
 			OperationObject,
 			LocalDeclaration
 		};
+
+		friend class Comment;
+		friend class Function;
+		friend class OperationObject;
+		friend class LocalDeclaration;
+		friend class RootNode;
 
 	protected:
 		bool				_isNewLine;
@@ -39,11 +46,15 @@ namespace cJass
 		size_t				_topIndex;
 		Node*				_top;
 		bool				_isString;
+		bool				_isWrapper;
+		RootNode*			_root;
 
 	private:
 		Type				_type;
 		NL_iter				_it;
 
+	protected:
+		virtual void CountAllNodes() = 0;
 
 		Node(Node&) = delete;
 
@@ -66,27 +77,43 @@ namespace cJass
 		bool IsComplete() const;
 		void Complete(bool isComplete);
 		bool IsString() const;
+		bool IsWrapper() const;
 
 		NodePtr IterateSubnodes();
 		NodePtr AtNode(size_t i);
 		void ResetIterator();
 		template <class PtrType = Node> PtrType* Ptr() { return dynamic_cast<PtrType*>(this); }
+
 		virtual void ToLua() = 0;
 		virtual void InitData(const std::vector<std::string>& strings) = 0;
 	};
 
-	class GlobalSpace : public Node
+	class RootNode : public Node
 	{
+	public:
+		friend class Function;
+		friend class OperationObject;
+		friend class LocalDeclaration;
+
 	private:
-		std::vector<variable_t>		_globals;
-		std::vector<std::string>	_strIds;
+		std::vector<variable_t>								_globals;
+		std::vector<std::string>							_strIds;
+		int													_totalNodes;
+		int													_printedNodes;
+		std::shared_ptr<std::function<void(int,int)>>		_notifyCallback;
+	
+	protected:
+		void IncrementNodeCount(size_t i);
+		virtual void CountAllNodes() override;
 		 
 	public:
-		GlobalSpace(OutputInterface& outIf);
+		RootNode(OutputInterface& outIf);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
 		void InsertStringId(const std::string& strId);
 		bool HasStringId(const std::string& str) const;
+		void TryToCreatePrintNotify();
+		void AddNotifyCallback(NotifyCallback callback);
 		void Clear();
 	};
 
@@ -94,6 +121,9 @@ namespace cJass
 	{
 	private:
 		std::string _comment;
+
+	protected:
+		virtual void CountAllNodes() override;
 
 	public:
 		Comment(OutputInterface& outIf, Node* top);
@@ -108,6 +138,9 @@ namespace cJass
 		std::string					_returnType;
 		std::vector<std::string>	_args;
 		std::vector<std::string>	_strIds;
+
+	protected:
+		virtual void CountAllNodes() override;
 
 	public:
 		Function(OutputInterface& outIf, Node* top);
@@ -178,6 +211,9 @@ namespace cJass
 		ConstType		_cType;
 		bool			_AssignUnary;
 
+	protected:
+		virtual void CountAllNodes() override;
+
 	public:
 		OperationObject(OutputInterface& outIf, Node* top);
 		virtual void ToLua() override;
@@ -197,6 +233,9 @@ namespace cJass
 		std::string					 _type;
 		std::vector<std::string>	 _vars;
 		std::vector<std::string>	_arrSizes;
+
+	protected:
+		virtual void CountAllNodes() override;
 
 	public:
 		LocalDeclaration(OutputInterface& outIf, Node* top);

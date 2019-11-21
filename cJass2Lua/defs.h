@@ -11,7 +11,7 @@
 #pragma warning(disable : 4834)
 
 
-#define APP_VER		"1.05"
+#define APP_VER		"1.06"
 #ifdef _WIN64
 #define APP_BUILD	"x64"
 #else
@@ -21,11 +21,14 @@
 #define min(a,b) ((a < b) ? a : b)
 #define max(a,b) ((a > b) ? a : b)
 
+using NotifyCallback = void(int, int);
+
 namespace cJass
 {
 	using csref_t = const ::std::string&;
 
 	class Node;
+	class RootNode;
 	using NodePtr = ::std::shared_ptr<Node>;
 	using NodeList = ::std::vector<NodePtr>;
 	using NL_iter = NodeList::iterator;

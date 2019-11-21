@@ -24,8 +24,26 @@ enum
 	IDC_INPUT = 201,
 	IDC_OUTPUT,
 	IDC_STATUS,
+	IDC_STATUS_FILES,
+	IDC_STATUS_LINES,
+	IDC_STATUS_NODES,
+	IDC_PROGRESS_FILES,
+	IDC_PROGRESS_LINES,
+	IDC_PROGRESS_NODES,
 	IDC_BUTTON
 };
+
+namespace ProgressControls
+{
+	HWND hLineStatus;
+	HWND hLineProgress;
+
+	HWND hNodeStatus;
+	HWND hNodeProgress;
+	
+	HWND hFileStatus;
+	HWND hFileProgress;
+}
 
 
 struct ParseArgs
@@ -41,6 +59,42 @@ cJass::Parser2*	   _parser = nullptr;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
+void lineParserCallback(int current, int total)
+{
+	const char fmt[] = "Lines parsed: %d/%d";
+	char buf[128];
+	sprintf_s(buf, sizeof(buf), fmt, current, total);
+	SetWindowTextA(ProgressControls::hLineStatus, buf);
+	SendMessage(ProgressControls::hLineProgress, PBM_SETRANGE, 0, MAKELPARAM(0, total));
+	SendMessage(ProgressControls::hLineProgress, PBM_SETPOS, current, 0);
+	UpdateWindow(ProgressControls::hLineProgress);
+	UpdateWindow(ProgressControls::hLineStatus);
+}
+
+void nodeParserCallback(int current, int total)
+{
+	const char fmt[] = "Nodes written: %d/%d";
+	char buf[128];
+	sprintf_s(buf, sizeof(buf), fmt, current, total);
+	SetWindowTextA(ProgressControls::hNodeStatus, buf);
+	SendMessage(ProgressControls::hNodeProgress, PBM_SETRANGE, 0, MAKELPARAM(0, total));
+	SendMessage(ProgressControls::hNodeProgress, PBM_SETPOS, current, 0);
+	UpdateWindow(ProgressControls::hNodeProgress);
+	UpdateWindow(ProgressControls::hNodeStatus);
+}
+
+void setFilesParsed(int current, int total)
+{
+	const char fmt[] = "File progress: %d/%d";
+	char buf[128];
+	sprintf_s(buf, sizeof(buf), fmt, current, total);
+	SetWindowTextA(ProgressControls::hFileStatus, buf);
+	SendMessage(ProgressControls::hFileProgress, PBM_SETRANGE, 0, MAKELPARAM(0, total));
+	SendMessage(ProgressControls::hFileProgress, PBM_SETPOS, current, 0);
+	UpdateWindow(ProgressControls::hFileProgress);
+	UpdateWindow(ProgressControls::hFileStatus);
+}
+
 void parserThread(ParseArgs args)
 {
 	try
@@ -55,6 +109,30 @@ void parserThread(ParseArgs args)
 				throw std::runtime_error("Output path when input is directory must be directory.");
 			else if (!Utils::dirExists(args.out))
 				SHCreateDirectoryEx(NULL, args.out.c_str(), NULL);
+
+			int fileCounter = 0;
+			int filesTotal = 0; 
+
+			for (auto& entry : fs::directory_iterator(args.in))
+			{
+				fname = entry.path().u8string();
+				if (Utils::dirExists(fname))
+					continue;
+
+				if (!Utils::strEndsWith(fname, ".txt")
+					&& !Utils::strEndsWith(fname, ".j")
+					&& !Utils::strEndsWith(fname, ".jass")
+					&& !Utils::strEndsWith(fname, ".cjass")
+					&& !Utils::strEndsWith(fname, ".cj")
+					&& !Utils::strEndsWith(fname, ".jj")
+					&& !Utils::strEndsWith(fname, ".w3j")
+					&& !Utils::strEndsWith(fname, ".w3cj"))
+					continue;
+
+				filesTotal++;
+			}
+
+			setFilesParsed(0, filesTotal);
 
 			for (auto& entry : fs::directory_iterator(args.in))
 			{
@@ -79,10 +157,14 @@ void parserThread(ParseArgs args)
 				status2 += reu::IndexSubstr(fname, fname.find_last_of("\\/") + 1, fname.length() - 1) + " ...";
 				SetWindowTextA(args.status, status.c_str());
 				UpdateWindow(args.hwnd);
-					_parser->Parse(fname);
+					_parser->Parse(fname, lineParserCallback);
 				SetWindowTextA(args.status, status2.c_str());
 				UpdateWindow(args.hwnd);
-					_parser->ToLua(args.out);
+					_parser->ToLua(args.out, nodeParserCallback);
+				fileCounter++;
+				if (fileCounter != filesTotal)
+					nodeParserCallback(0, 0);
+				setFilesParsed(fileCounter, filesTotal);
 			}
 
 			SetWindowTextA(args.status, "Status: Done!");
@@ -106,10 +188,11 @@ void parserThread(ParseArgs args)
 
 				SetWindowTextA(args.status, status.c_str());
 				UpdateWindow(args.hwnd);
-				_parser->Parse(args.in);
+				_parser->Parse(args.in, lineParserCallback);
 				SetWindowTextA(args.status, status2.c_str());
 				UpdateWindow(args.hwnd);
-				_parser->ToLua(args.out);
+				_parser->ToLua(args.out, nodeParserCallback);
+				setFilesParsed(1, 1);
 				SetWindowTextA(args.status, "Status: Done!");
 				EnableWindow(args.button, true);
 				UpdateWindow(args.hwnd);
@@ -216,7 +299,7 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MAINICON));
 
 		int width = 436;
-		int height = 250;
+		int height = 300;
 		int xPos = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
 		int yPos = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
 
@@ -238,19 +321,35 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		if (!hwnd)
 			throw (std::runtime_error("Failed to create window."));
 
+		NONCLIENTMETRICS ncm;
+		ncm.cbSize = sizeof(NONCLIENTMETRICS);
+		::SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
+		HFONT hFont = ::CreateFontIndirect(&ncm.lfMessageFont);
+		::SendMessage(hwnd, WM_SETFONT, (WPARAM)hFont, MAKELPARAM(TRUE, 0));
+
 		//Begin constructing window
-		int ox = 0, oy = 0;
-		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Input file or directory"), hInstance, WS_VISIBLE, NULL, NULL, 10 + ox, 4 + oy, 132, 20, false);
+		int ox = 10, oy = 4;
+		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Input file or directory"), hInstance, WS_VISIBLE, NULL, NULL, ox, oy, 132, 20, false);
 		oy += 17;
-		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastInputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_INPUT), 10 + ox, 4 + oy, 400, 23, false);
+		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastInputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_INPUT), ox, oy, 400, 23, false);
 		oy += 27;
-		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Output file or directory"), hInstance, WS_VISIBLE, NULL, NULL, 10 + ox, 4 + oy, 132, 20, false);
+		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Output file or directory"), hInstance, WS_VISIBLE, NULL, NULL, ox, oy, 132, 20, false);
 		oy += 17;
-		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastOutputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_OUTPUT), 10 + ox, 4 + oy, 400, 23, false);
+		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastOutputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_OUTPUT), ox, oy, 400, 23, false);
 		oy += 27;
-		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Status: Ready"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_STATUS), 10 + ox, 4 + oy, 400, 45, false);
-		oy += 79;
-		Utils::CreateWindowElement(hwnd, ET_BUTTON, TEXT("Translate"), hInstance, WS_VISIBLE | WS_TABSTOP | BS_FLAT, NULL, HMENU(IDC_BUTTON), 10 + ox, 4 + oy, 400, 30, false);
+		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Status: Ready"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_STATUS), ox, oy, 400, 25, false);
+		oy += 31;
+		ProgressControls::hLineStatus = Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Lines parsed: 0/0"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_STATUS_LINES), ox, oy, 200, 20, false);
+		ProgressControls::hNodeStatus = Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Nodes written: 0/0"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_STATUS_NODES), ox + 205, oy, 200, 20, false);
+		oy += 21;
+		ProgressControls::hLineProgress = Utils::CreateWindowElement(hwnd, ET_PROGRESS, TEXT(""), hInstance, WS_VISIBLE, NULL, HMENU(IDC_PROGRESS_LINES), ox, oy, 195, 20, false);
+		ProgressControls::hNodeProgress = Utils::CreateWindowElement(hwnd, ET_PROGRESS, TEXT(""), hInstance, WS_VISIBLE, NULL, HMENU(IDC_PROGRESS_NODES), ox + 205, oy, 195, 20, false);
+		oy += 26;
+		ProgressControls::hFileStatus = Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("File progress: 0/0"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_STATUS_FILES), ox, oy, 200, 20, false);
+		oy += 21;
+		ProgressControls::hFileProgress = Utils::CreateWindowElement(hwnd, ET_PROGRESS, TEXT(""), hInstance, WS_VISIBLE, NULL, HMENU(IDC_PROGRESS_FILES), ox, oy, 400, 20, false);
+		oy += 30;
+		Utils::CreateWindowElement(hwnd, ET_BUTTON, TEXT("Translate"), hInstance, WS_VISIBLE | WS_TABSTOP | BS_FLAT, NULL, HMENU(IDC_BUTTON), ox, oy, 400, 30, false);
 
 		//End constructing window
 
@@ -350,16 +449,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	switch (uMsg)
 	{
+	case WM_CLOSE:
+	case WM_QUIT:
 	case WM_DESTROY:
 		PostQuitMessage(0);
+		quick_exit(0);
 		return 0;
-		break;
+
 	case WM_COMMAND:
 		switch (wp)
 		{
 		case IDC_BUTTON:
 			if (g_firstRunDone && Settings::ClearLogsOnNewTranslate)
 				appLog(Clear);
+			setFilesParsed(0, 0);
+			lineParserCallback(0, 0);
+			nodeParserCallback(0, 0);
 			GetWindowText(input, buf, sizeof(buf));
 			args.in = buf;
 			GetWindowText(output, buf, sizeof(buf));

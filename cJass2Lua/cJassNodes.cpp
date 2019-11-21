@@ -22,7 +22,7 @@ namespace cJass
 			PRODUCING_NODE(OperationObject);
 			PRODUCING_NODE(LocalDeclaration);
 		default:
-			throw std::runtime_error("Error! Node GlobalSpace cannot be produced!");
+			throw std::runtime_error("Error! Node RootNode cannot be produced!");
 		}
 	}
 
@@ -37,8 +37,8 @@ namespace cJass
 		case Type::Function:
 			return "Function";
 
-		case Type::GlobalSpace:
-			return "GlobalSpace";
+		case Type::RootNode:
+			return "RootNode";
 
 		case Type::LocalDeclaration:
 			return "LocalDeclaration";
@@ -157,6 +157,8 @@ namespace cJass
 		, _isComplete(true)
 		, _topIndex(0)
 		, _isString(false)
+		, _isWrapper(false)
+		, _root(nullptr)
 	{
 		if (top != nullptr)
 		{
@@ -174,7 +176,7 @@ namespace cJass
 	{
 		if (node->_depthIndex == 0)
 			node->_depthIndex = _depthIndex + 1;
-
+		node->_root = _root;
 		_subnodes.push_back(node);
 		ResetIterator();
 	}
@@ -256,14 +258,25 @@ namespace cJass
 		return _isString;
 	}
 
-	GlobalSpace::GlobalSpace(OutputInterface& outIf)
-		: Node(outIf, Node::Type::GlobalSpace, nullptr)
-		, _globals({})
+	bool Node::IsWrapper() const
 	{
+		return _isWrapper;
+	}
+
+	RootNode::RootNode(OutputInterface& outIf)
+		: Node(outIf, Node::Type::RootNode, nullptr)
+		, _globals({})
+		, _totalNodes(1)
+		, _printedNodes(0)
+		, _notifyCallback(nullptr)
+	{
+		_root = this;
 	}
 	
-	void GlobalSpace::ToLua() 
+	void RootNode::ToLua() 
 	{
+		CountAllNodes();
+
 		for (auto& var : _globals)
 		{
 			if (var.initValue == "" || var.initValue == "null")
@@ -276,14 +289,15 @@ namespace cJass
 
 		for (auto& node : _subnodes)
 			node->ToLua();
+		TryToCreatePrintNotify();
 	}
 
-	void GlobalSpace::InitData(const std::vector<std::string>& strings)
+	void RootNode::InitData(const std::vector<std::string>& strings)
 	{
 		size_t size = strings.size();
 		if (size % 3 != 0)
 		{
-			appLog(Critical) << "GlobalSpace::InitData: Wrong set of input data. Got" << size << ", expected" << "3";
+			appLog(Critical) << "RootNode::InitData: Wrong set of input data. Got" << size << ", expected" << "3";
 			appLog(Debug) << "Args:" << strings;
 			return;
 		}
@@ -308,21 +322,50 @@ namespace cJass
 		}
 	}
 
-	void GlobalSpace::Clear()
+	void RootNode::TryToCreatePrintNotify()
+	{
+		_printedNodes++;
+		if (_notifyCallback != nullptr)
+		{
+			(*_notifyCallback)(_printedNodes, _totalNodes);
+		}
+	}
+
+	void RootNode::IncrementNodeCount(size_t i)
+	{
+		_totalNodes += int(i);
+	}
+
+	void RootNode::CountAllNodes()
+	{
+		IncrementNodeCount(_subnodes.size());
+		for (auto& node : _subnodes)
+			node->CountAllNodes();
+	}
+
+	void RootNode::AddNotifyCallback(NotifyCallback callback)
+	{
+		_notifyCallback = std::shared_ptr<std::function<void(int, int)>>(new std::function<void(int,int)>(callback));
+	}
+
+	void RootNode::Clear()
 	{
 		_tabs = 0;
+		_printedNodes = 0;
+		_totalNodes = 1;
+		_notifyCallback = nullptr;
 		_subnodes.clear();
 		_globals.clear();
 		_strIds.clear();
 		ResetIterator();
 	}
 
-	void GlobalSpace::InsertStringId(const std::string& str)
+	void RootNode::InsertStringId(const std::string& str)
 	{
 		_strIds.push_back(str);
 	}
 
-	bool GlobalSpace::HasStringId(const std::string& strId) const
+	bool RootNode::HasStringId(const std::string& strId) const
 	{
 		for (const auto& str : _strIds)
 		{
@@ -353,13 +396,17 @@ namespace cJass
 		}
 		n = _comment.find("\n");
 		if (n == 0 && end == 0)
+		{
+			if (_root)
+				_root->TryToCreatePrintNotify();
 			return;
+		}
 
 
 		if (n == 0)
 		{
 			_out << OutputInterface::nl;
-			if (Top()->GetType() != Node::Type::GlobalSpace)
+			if (Top()->GetType() != Node::Type::RootNode)
 				PrintTabs();
 		}
 		else
@@ -377,6 +424,13 @@ namespace cJass
 		{
 			_out << OutputInterface::nl;
 		}
+
+		if (_root)
+			_root->TryToCreatePrintNotify();
+	}
+
+	void Comment::CountAllNodes()
+	{
 	}
 
 	void Comment::InitData(const std::vector<std::string>& strings)
@@ -439,6 +493,16 @@ namespace cJass
 			node->ToLua();
 
 		_out << OutputInterface::nl << "end" << OutputInterface::nl;
+
+		if (_root)
+			_root->TryToCreatePrintNotify();
+	}
+
+	void Function::CountAllNodes()
+	{
+		_root->IncrementNodeCount(_subnodes.size());
+		for (auto& node : _subnodes)
+			node->CountAllNodes();
 	}
 
 	void Function::InitData(const std::vector<std::string>& strings)
@@ -490,7 +554,7 @@ namespace cJass
 		auto top = _top;
 		while (top->Top() != nullptr)
 			top = top->Top();
-		if (top->Ptr<GlobalSpace>()->HasStringId(_opText))
+		if (top->Ptr<RootNode>()->HasStringId(_opText))
 			return true;
 		else
 		{
@@ -838,6 +902,16 @@ namespace cJass
 		default:
 			appLog(Warning) << "OperationObject::ToLua: Unsupported OpType.";
 		}
+
+		if (_root)
+			_root->TryToCreatePrintNotify();
+	}
+
+	void OperationObject::CountAllNodes()
+	{
+		_root->IncrementNodeCount(_subnodes.size());
+		for (auto& node : _subnodes)
+			node->CountAllNodes();
 	}
 
 	void OperationObject::InitData(const std::vector<std::string>& strings)
@@ -895,24 +969,29 @@ namespace cJass
 
 		case 'v':
 			_otype = OpType::VarInitExpression;
+			_isWrapper = true;
 			break;
 
 		case 'a':
 			_otype = OpType::Argument;
+			_isWrapper = true;
 			break;
 
 		case 'S':
 			_otype = OpType::DoStatement;
 			if (s[1] == 'n')
 				_extra = "not";
+			_isWrapper = true;
 			break;
 
 		case 'r':
 			_otype = OpType::Return;
+			_isWrapper = true;
 			break;
 
 		case 'T':
 			_otype = OpType::ExitWhen;
+			_isWrapper = true;
 			break;
 
 		case 'L':
@@ -986,6 +1065,7 @@ namespace cJass
 
 		case 'W':
 			_otype = OpType::Wrapper; 
+			_isWrapper = true;
 			break;
 
 		case 'n':
@@ -1028,15 +1108,21 @@ namespace cJass
 			if (i == this_index - 1)
 			{
 				node = top->AtNode(i);
+				if (node->IsString())
+					return true;
+
 				if (node->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Index)
 				{
 					for (int j = int(i); j >= 0; j--)
 					{
 						node = top->AtNode(j);
+						if (node->IsString())
+							return true;
+
 						if (node->Ptr<OperationObject>()->GetOpType() != OperationObject::OpType::Index)
 						{
 							neighbours.push_back(node->Ptr<OperationObject>()->_opText);
-							continue;
+							break;
 						}
 					}
 				}
@@ -1047,12 +1133,14 @@ namespace cJass
 			if (i == this_index + 1)
 			{
 				node = top->AtNode(i);
+				if (node->IsString())
+					return true;
 				neighbours.push_back(node->Ptr<OperationObject>()->_opText);
 			}
 		}
 
 		Function* fnode = nullptr;
-		GlobalSpace* gspace = nullptr;
+		RootNode* gspace = nullptr;
 
 		top = this;
 		while (top != nullptr)
@@ -1070,7 +1158,7 @@ namespace cJass
 		{
 			if (top->Top() == nullptr)
 			{
-				gspace = top->Ptr<GlobalSpace>();
+				gspace = top->Ptr<RootNode>();
 				break;
 			}
 			top = top->Top();
@@ -1202,6 +1290,16 @@ namespace cJass
 				}
 			}
 		}
+
+		if (_root)
+			_root->TryToCreatePrintNotify();
+	}
+
+	void LocalDeclaration::CountAllNodes()
+	{
+		_root->IncrementNodeCount(_subnodes.size());
+		for (auto& node : _subnodes)
+			node->CountAllNodes();
 	}
 
 	void LocalDeclaration::InitData(const std::vector<std::string>& strings)

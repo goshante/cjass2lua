@@ -402,7 +402,7 @@ namespace cJass
 		return _activeNode->LastSubnode();
 	}
 
-	void Parser2::Parse(csref_t cjassFileName)
+	void Parser2::Parse(csref_t cjassFileName, NotifyCallback lineProgressHandler)
 	{
 		char c;
 		char prev = '\0';
@@ -412,6 +412,9 @@ namespace cJass
 		bool isMultilineComment = false;
 		bool isRawCode = false;
 		bool isIndex = false;
+		size_t linesTotal = 0;
+		std::shared_ptr<std::function<void(int, int)>> notifyLineCallback =
+			std::shared_ptr<std::function<void(int, int)>>(new std::function<void(int, int)>(lineProgressHandler));
 		
 		if (!Utils::fileExists(cjassFileName.c_str()))
 		{
@@ -424,6 +427,8 @@ namespace cJass
 		_lastAddedNode = _activeNode;
 		_rootNode.Clear();
 		reu::ReplaceAll(_text, "\\.evaluate", "");
+		auto lt = reu::SearchAll(_text, "[\\n]");
+		linesTotal = lt.Count();
 		_fileName = cjassFileName;
 		_line = 1;
 		_wordPos = 1;
@@ -471,6 +476,7 @@ namespace cJass
 			static bool						vJASSfuncHeader = false;
 			static bool						returns = false;
 			static bool						takes = false;
+			static bool						backToBlockEnd = false;
 
 			if (clearStatic)
 			{
@@ -503,6 +509,7 @@ namespace cJass
 				vJASSfuncHeader = false;
 				returns = false;
 				takes = false;
+				backToBlockEnd = false;
 				return;
 			}
 			
@@ -1104,7 +1111,7 @@ namespace cJass
 						{
 							_lastAddedNode->InitData({ "ub", prevWord, _word });
 						}
-						appLog(Debug) << "Adding post-increment" << _word << prevWord;
+						appLog(Debug) << "Adding post-increment" << prevWord << _word;
 					}
 					else
 					{
@@ -1292,6 +1299,7 @@ namespace cJass
 					break;
 
 				case word_t::lambda:
+					ignoreNextBlockOp = false;
 					lambda = true;
 					break;
 
@@ -1491,6 +1499,7 @@ namespace cJass
 					break;
 
 				case word_t::end:
+				_opEnd:
 					if (_activeNode->GetType() == Node::Type::OperationObject
 						&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Expression
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Call))
@@ -1549,6 +1558,13 @@ namespace cJass
 						bstack_set_top(wrapperStateStack, false);
 					_pop();
 					bstack_set_top(unclosedOpStack, false);
+
+					if (backToBlockEnd)
+					{
+						backToBlockEnd = false;
+						goto _blockEnd;
+					}
+
 					break;
 
 				case word_t::blockBegin:
@@ -1583,6 +1599,14 @@ namespace cJass
 				case word_t::endloop:
 				case word_t::blockEnd:
 					ignoreNextBlockOp = false;
+
+					if (_activeNode->IsWrapper())
+					{
+						backToBlockEnd = true;
+						goto _opEnd;
+					}
+
+				_blockEnd:
 					if (_activeNode->GetType() == Node::Type::OperationObject)
 						_activeNode->Ptr<OperationObject>()->CloseBlock();
 					if (_depth() == 1)
@@ -1786,6 +1810,8 @@ namespace cJass
 					break;
 				}
 
+				if (notifyLineCallback != nullptr)
+					(*notifyLineCallback)(int(_line), int(linesTotal));
 				ctPrev = ct;
 			}
 			appLog(Info) << "Parsing of file " << cjassFileName << " successfuly done!" << _line;
@@ -1797,7 +1823,7 @@ namespace cJass
 		}
 	}
 
-	void Parser2::ToLua(csref_t outputFileName)
+	void Parser2::ToLua(csref_t outputFileName, NotifyCallback nodeProgressHandler)
 	{
 		if (!Utils::dirExists(outputFileName) && outputFileName != "")
 			_outIf.SetOutputFile(outputFileName);
@@ -1832,6 +1858,9 @@ namespace cJass
 
 			_outIf.SetOutputFile(path);
 		}
+
+		if (nodeProgressHandler != nullptr)
+			_rootNode.AddNotifyCallback(nodeProgressHandler);
 		_rootNode.ToLua();
 		_outIf.Close();
 	}
