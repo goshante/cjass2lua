@@ -188,6 +188,9 @@
   <ItemGroup>
     <Image Include="D:\Downloads\main.ico" />
   </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="cJass2Lua.manifest" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

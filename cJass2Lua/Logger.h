@@ -26,7 +26,7 @@ namespace _____LOGGER
 		{
 		private:
 			Logger*							 _logger;
-			static std::mutex				 _writeMutex;
+			static std::recursive_mutex		_writeMutex;
 
 			Writer(const Writer&)			 = delete;
 			Writer& operator=(const Writer&) = delete;
