@@ -25,6 +25,8 @@ OutputInterface::OutputInterface(Type type, NewLineType nlType, std::string& fil
 	case Type::String:
 		_strPtr = &fileNameOrString;
 		break;
+
+	case Type::FileAndConsole:
 	case Type::File:
 		hFile = CreateFileA(fileNameOrString.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
 			CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, NULL);
@@ -87,6 +89,11 @@ void OutputInterface::_toOutput(const std::string& str)
 		break;
 
 	case Type::File:
+		WriteFile(*_file, &str[0], DWORD(str.length()), &dw, NULL);
+		break;
+
+	case Type::FileAndConsole:
+		std::cout << str;
 		WriteFile(*_file, &str[0], DWORD(str.length()), &dw, NULL);
 		break;
 	}

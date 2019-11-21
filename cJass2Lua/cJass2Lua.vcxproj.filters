@@ -85,4 +85,7 @@
       <Filter>Файлы ресурсов</Filter>
     </Image>
   </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="cJass2Lua.manifest" />
+  </ItemGroup>
 </Project>

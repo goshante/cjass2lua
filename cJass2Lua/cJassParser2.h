@@ -16,7 +16,7 @@ namespace cJass
 		OutputInterface				_outIf;
 		std::string					_text;
 		std::string					_word;
-		GlobalSpace					_rootNode;
+		RootNode					_rootNode;
 		Node*						_activeNode;
 		Node*						_lastAddedNode;
 		size_t						_line;
@@ -34,7 +34,7 @@ namespace cJass
 	public:
 		Parser2();
 
-		void Parse(csref_t cjassFileName);
-		void ToLua(csref_t outputFileName);
+		void Parse(csref_t cjassFileName, NotifyCallback lineProgressHandler = nullptr);
+		void ToLua(csref_t outputFileName, NotifyCallback nodeProgressHandler = nullptr);
 	};
 }

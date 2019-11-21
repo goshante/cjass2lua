@@ -25,6 +25,7 @@ public:
 		None,
 		File,
 		Console,
+		FileAndConsole,
 		String
 	};
 
