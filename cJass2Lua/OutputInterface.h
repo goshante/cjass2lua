@@ -36,6 +36,13 @@ public:
 		CRLF
 	};
 
+	enum class FileMode
+	{
+		CreateAlways,
+		CreateIfNotExist,
+		OpenExisting
+	};
+
 	class NewLine {};
 	static NewLine nl;
 
@@ -44,6 +51,7 @@ protected:
 	std::shared_ptr<WinHandle>		_file;
 	std::string*					_strPtr;
 	std::string						_nl;
+	FileMode						_mode;
 
 	virtual void _toOutput(const std::string& str);
 
@@ -53,8 +61,8 @@ protected:
 public:
 
 	OutputInterface();
-	OutputInterface(Type type, NewLineType nlType, std::string& fileNameOrString);
-	OutputInterface(Type type, NewLineType nlType);
+	OutputInterface(Type type, NewLineType nlType, std::string& fileNameOrString, FileMode mode = FileMode::CreateAlways);
+	OutputInterface(Type type, NewLineType nlType, FileMode mode = FileMode::CreateAlways);
 	virtual ~OutputInterface(){}
 
 	bool IsReady() const;

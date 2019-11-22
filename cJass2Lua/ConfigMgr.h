@@ -5,8 +5,10 @@
 #include <sstream>
 #include <map>
 
+#include "OutputInterface.h"
 
-class CConfigMgr
+
+class CConfigMgr : public OutputInterface
 {
 private:
 	struct ConfigVar

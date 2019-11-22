@@ -847,6 +847,9 @@ namespace cJass
 			PrintTabs(1);
 			break;
 
+		case OpType::For:
+			break;
+
 		case OpType::While:
 			_out << OutputInterface::nl;
 			PrintTabs(1);
@@ -982,6 +985,10 @@ namespace cJass
 			if (s[1] == 'n')
 				_extra = "not";
 			_isWrapper = true;
+			break;
+
+		case 'f':
+			_otype = OpType::For;
 			break;
 
 		case 'r':

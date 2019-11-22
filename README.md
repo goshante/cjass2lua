@@ -26,6 +26,7 @@ Warcraft III Reforged brought us Lua scripting, but still a lot of map makers fo
 - Analyzing classes/structures and converting them to Lua meta table implementation (Planned to be implemented soon)
 - vJASS features as scopes, modules, etc. are unsupported (and have no sense in Lua)
 - Pre-processor directives
+- cJass 'for' loops are prohibited.
 - Macroses. Only constants and expression defines, function and variable shorters. Macroses are translated into global variables.
 
 ### Pay attention to this before translating your code
@@ -37,7 +38,7 @@ Warcraft III Reforged brought us Lua scripting, but still a lot of map makers fo
 - Read logs if something goes wrong, this application leaves cjass2lua.log file with all it's actions and possible problems. Everything should be fine if you have no warnings.
 
 ### Latest release
-- [v1.06](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.06)
+- [v1.07](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.07)
 
 ### Manual
 #### GUI

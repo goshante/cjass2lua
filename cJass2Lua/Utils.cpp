@@ -7,6 +7,7 @@
 #include <tlhelp32.h>
 #include <Shlwapi.h>
 #include <regex>
+#include <Shlobj.h>
 #include "reutils.h"
 #include "Settings.h"
 

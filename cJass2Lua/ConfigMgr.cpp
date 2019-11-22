@@ -5,7 +5,7 @@
 using namespace std;
 
 
-CConfigMgr::CConfigMgr(const string& filename)
+CConfigMgr::CConfigMgr(const string& filename) : OutputInterface(Type::File, NewLineType::CRLF, FileMode::CreateIfNotExist)
 {
 	if (filename != "")
 	{
@@ -140,6 +140,7 @@ bool CConfigMgr::SaveAs(const string& filename)
 		first = false;
 	}
 
+	file.flush();
 	file.close();
 
 	return true;

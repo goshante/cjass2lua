@@ -181,6 +181,7 @@ namespace cJass
 			Do,
 			Loop,
 			Lambda,
+			For,
 
 			//Special wrappers
 			Wrapper,			//General wrapper for operations like call, assignment and return
