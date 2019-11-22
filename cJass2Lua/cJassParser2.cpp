@@ -1,5 +1,6 @@
 #include "cJassParser2.h"
 #include <sstream>
+#include <shlobj_core.h>
 
 #include "reutils.h"
 #include "Utils.h"
@@ -160,6 +161,9 @@ namespace cJass
 
 		if (word == "do")
 			return word_t::Do;
+
+		if (word == "for")
+			return word_t::For;
 
 		if (word == "whilenot")
 			return word_t::whilenot;
@@ -428,7 +432,7 @@ namespace cJass
 		_rootNode.Clear();
 		reu::ReplaceAll(_text, "\\.evaluate", "");
 		auto lt = reu::SearchAll(_text, "[\\n]");
-		linesTotal = lt.Count();
+		linesTotal = lt.Count() + 1;
 		_fileName = cjassFileName;
 		_line = 1;
 		_wordPos = 1;
@@ -509,7 +513,6 @@ namespace cJass
 				vJASSfuncHeader = false;
 				returns = false;
 				takes = false;
-				backToBlockEnd = false;
 				return;
 			}
 			
@@ -1255,7 +1258,7 @@ namespace cJass
 					waitingForCondExpr = true;
 					break;
 
-				case word_t::elseif: //Todo: Close block with elseif/else if possiblee
+				case word_t::elseif:
 					if (_activeNode->IsBlock()
 						&& _activeNode->GetType() == Node::Type::OperationObject
 						&& _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::If)
@@ -1352,6 +1355,10 @@ namespace cJass
 						else
 							appLog(Warning) << "Unexpected usage of ," << DOC_LINEPOS << "This is not function call or variable enumeration.";
 					}
+					break;
+
+				case word_t::For:
+					throw std::runtime_error("Error, 'for' loop detected. Please, replace it with 'while/whilenot/do/loop'. Loop 'for' is unsupported.");
 					break;
 
 				case word_t::Do:
@@ -1849,6 +1856,9 @@ namespace cJass
 				path += fileName;
 			else
 			{
+				if (!Utils::dirExists(path))
+					SHCreateDirectoryEx(NULL, path.c_str(), NULL);
+
 				if (path.find("\\") != std::string::npos)
 					path += "\\";
 				else
