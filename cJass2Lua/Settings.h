@@ -14,11 +14,17 @@ namespace Settings
 	extern bool								ConvertRawCodes;
 	extern bool								ClearLogsOnNewTranslate;
 	extern bool								DoNotIncrementArrayIndexConstants;
+	extern bool								UseEmmyDocAnnotations;
 	extern OutputInterface::NewLineType		OutputNewLineType;
 	extern std::string						OutputLanguage;
 	extern _____LOGGER::Logger::Level		LogLevel;
 	extern std::string						lastInputPath;
 	extern std::string						lastOutputPath;
+
+	inline bool emmyDoc()
+	{
+		return Settings::UseEmmyDocAnnotations;
+	}
 }
 
 #else
@@ -31,6 +37,7 @@ namespace Settings
 	bool									ConvertRawCodes = false;
 	bool									ClearLogsOnNewTranslate = false;
 	bool									DoNotIncrementArrayIndexConstants = true;
+	bool									UseEmmyDocAnnotations = true;
 	OutputInterface::NewLineType			OutputNewLineType = OutputInterface::NewLineType::CRLF;
 	std::string								OutputLanguage = "Lua";
 	_____LOGGER::Logger::Level				LogLevel = LOGLVL(Debug);
@@ -44,6 +51,7 @@ namespace Settings
 		Settings::ConvertRawCodes = config.GetValue_Bool("Settings", "ConvertRawCodes", false);
 		Settings::ClearLogsOnNewTranslate = config.GetValue_Bool("Settings", "ClearLogsOnNewTranslate", false);
 		Settings::DoNotIncrementArrayIndexConstants = config.GetValue_Bool("Settings", "DoNotIncrementArrayIndexConstants", true);
+		Settings::UseEmmyDocAnnotations = config.GetValue_Bool("Settings", "UseEmmyDocAnnotations", true);
 		std::string nlType = config.GetValue_Str("Settings", "OutputNewLineType", "CRLF");
 		Settings::OutputLanguage = config.GetValue_Str("Settings", "OutputLanguage", "Lua");
 		Settings::LogLevel = static_cast<_____LOGGER::Logger::Level>(config.GetValue_Num<int>("Settings", "LogLevel", 0));
@@ -68,6 +76,7 @@ namespace Settings
 		config.SetValue_Bool("Settings", "ConvertRawCodes", Settings::ConvertRawCodes);
 		config.SetValue_Bool("Settings", "ClearLogsOnNewTranslate", Settings::ClearLogsOnNewTranslate);
 		config.SetValue_Bool("Settings", "DoNotIncrementArrayIndexConstants", Settings::DoNotIncrementArrayIndexConstants);
+		config.SetValue_Bool("Settings", "UseEmmyDocAnnotations", Settings::UseEmmyDocAnnotations);
 		config.SetValue_Str("Settings", "OutputLanguage", Settings::OutputLanguage);
 		config.SetValue_Num<int>("Settings", "LogLevel", static_cast<int>(Settings::LogLevel));
 		config.SetValue_Str("Pathes", "Input", Settings::lastInputPath);
@@ -83,6 +92,7 @@ namespace Settings
 		config.SetValue_Bool("Settings", "ConvertRawCodes", false);
 		config.SetValue_Bool("Settings", "ClearLogsOnNewTranslate", false);
 		config.SetValue_Bool("Settings", "DoNotIncrementArrayIndexConstants", true);
+		config.SetValue_Bool("Settings", "UseEmmyDocAnnotations", true);
 		config.SetValue_Str("Settings", "OutputNewLineType", "CRLF");
 		config.SetValue_Str("Settings", "OutputLanguage", "Lua");
 		config.SetValue_Num<int>("Settings", "LogLevel", 0);

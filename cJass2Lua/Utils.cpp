@@ -326,6 +326,9 @@ namespace Utils
 				return "FourCC(" + cnst + ")";
 		}
 
+		if (cnst[0] == '$')
+			return "0x" + cnst.substr(1, cnst.length() - 1);
+
 		if (cnst == "null")
 			return "nil";
 
@@ -350,5 +353,137 @@ namespace Utils
 			return cJass::OperationObject::ConstType::String;
 
 		return cJass::OperationObject::ConstType::Undefined;
+	}
+
+	std::string browse(HWND hwnd, HWND outputWindow, FileDialogType fdType)
+	{
+		HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED |
+			COINIT_DISABLE_OLE1DDE);
+
+		COMDLG_FILTERSPEC rgSpecOpen[] =
+		{
+			{ L"JASS/cJass script (*.j, *.jj, *.vj, *.cj, *.jass, *.cjass, *.vjass, *.w3j, *.w3cj)" , L"*.j;*.jj;*.vj;*.cj;*.jass;*.cjass;*.vjass;*.w3j;*.w3cj" },
+			{ L"Text files (*.txt)" , L"*.txt" },
+			{ L"All files (*.*)" , L"*.*" },
+		};
+
+		COMDLG_FILTERSPEC rgSpecSave[] =
+		{
+			{ L"Lua script (*.lua)" , L"*lua" }
+		};
+
+		const wchar_t defaultOpenFormat[] = L"*.j;*.jj;*.vj;*.cj;*.jass;*.cjass;*.vjass;*.w3j;*.w3cj";
+		const wchar_t defaultSaveFormat[] = L"";
+		FILEOPENDIALOGOPTIONS fopt = 0;
+		bool succeed = false;
+
+		if (SUCCEEDED(hr))
+		{
+			IFileDialog* pFileDialog;
+			std::string astr;
+			std::wstring wstr;
+
+			if (fdType == FileDialogType::Save)
+			{
+				hr = CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_ALL,
+					IID_IFileSaveDialog, reinterpret_cast<void**>(&pFileDialog));
+			}
+			else
+			{
+				hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL,
+					IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileDialog));
+			}
+
+			if (SUCCEEDED(hr))
+			{
+				pFileDialog->GetOptions(&fopt);
+
+				if (fdType == FileDialogType::Save)
+				{
+					pFileDialog->SetFileTypes(ARRAYSIZE(rgSpecSave), rgSpecSave);
+					pFileDialog->SetDefaultExtension(defaultSaveFormat);
+					fopt |= FOS_PATHMUSTEXIST;
+				}
+				else if (fdType == FileDialogType::Open)
+				{
+					pFileDialog->SetFileTypes(ARRAYSIZE(rgSpecOpen), rgSpecOpen);
+					pFileDialog->SetDefaultExtension(defaultOpenFormat);
+					fopt |= FOS_FILEMUSTEXIST;
+				}
+				else
+					fopt |= FOS_PICKFOLDERS;
+				pFileDialog->SetFileTypeIndex(0);
+				pFileDialog->SetOptions(fopt);
+				
+				hr = pFileDialog->Show(hwnd);
+
+				if (SUCCEEDED(hr))
+				{
+					IShellItem *pItem;
+					wchar_t* pszFilePath = nullptr;
+					hr = pFileDialog->GetResult(&pItem);
+					if (SUCCEEDED(hr))
+					{
+						hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
+
+						if (SUCCEEDED(hr))
+						{
+							wstr = pszFilePath;
+							CoTaskMemFree(pszFilePath);
+							succeed = true;
+						}
+							
+						pItem->Release();
+					}
+				}
+				pFileDialog->Release();
+			}
+			CoUninitialize();
+
+			if (succeed)
+			{
+				if (fdType == FileDialogType::Save)
+				{
+					if (wstr.length() <= 4)
+					{
+						if (wstr.find(L".lua") == std::string::npos)
+							wstr += L".lua";
+					}
+					else if (wstr.substr(wstr.length() - 4, 4) != L".lua")
+						wstr += L".lua";
+				}
+
+				astr.resize(wstr.size() + 1);
+				SetWindowTextW(outputWindow, wstr.c_str());
+				GetWindowTextA(outputWindow, &astr[0], int(astr.size()));
+			}
+					
+			return astr;
+		}
+
+		return "";
+	}
+
+	bool isLogicalOp(const std::string& op)
+	{
+		if (
+			op == ">"
+			|| op == "<"
+			|| op == ">="
+			|| op == "<="
+			|| op == "=="
+			|| op == "!="
+			|| op == "&&"
+			|| op == "and"
+			|| op == "||"
+			|| op == "or"
+			|| op == "!"
+			|| op == "not"
+			)
+		{
+			return true;
+		}
+
+		return false;
 	}
 }

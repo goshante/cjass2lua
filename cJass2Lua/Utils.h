@@ -19,6 +19,13 @@
 #define ET_SLIDER_V						12
 #define ET_SLIDER_H						13
 
+enum class FileDialogType
+{
+	Open,
+	Save,
+	SelectFolder
+};
+
 namespace Utils
 {
 	void RemoveBOMFromString(std::string& str);
@@ -35,4 +42,6 @@ namespace Utils
 	int rawCodeToInt(std::string code);
 	std::string const2lua(const std::string& cnst);
 	cJass::OperationObject::ConstType determConstType(const std::string& cjConst);
+	std::string browse(HWND hwnd, HWND outputWindow, FileDialogType fdType);
+	bool isLogicalOp(const std::string& op);
 }

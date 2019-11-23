@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <thread>
 #include <shlobj_core.h>
+#include <Winuser.h>
 
 #include "cJassParser2.h"
 #include "ConfigMgr.h"
@@ -19,11 +20,14 @@
 namespace fs = std::filesystem;
 static bool g_firstRunDone = false;
 
+COLORREF g_statusColor = RGB(10, 175, 10);
+
 enum
 {
 	IDC_INPUT = 201,
 	IDC_OUTPUT,
 	IDC_STATUS,
+	IDC_SHIFT_MESSAGE,
 	IDC_STATUS_FILES,
 	IDC_STATUS_LINES,
 	IDC_STATUS_NODES,
@@ -60,6 +64,17 @@ struct ParseArgs
 cJass::Parser2*	   _parser = nullptr;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+void changeStatusColor(HWND hwnd, COLORREF color)
+{
+	HWND hStatus = GetDlgItem(hwnd, IDC_STATUS);
+	RECT rect;
+	g_statusColor = color;
+	GetClientRect(hStatus, &rect);
+	InvalidateRect(hStatus, &rect, TRUE);
+	MapWindowPoints(hStatus, hwnd, (POINT *)&rect, 2);
+	RedrawWindow(hwnd, &rect, NULL, RDW_ERASE | RDW_INVALIDATE);
+}
 
 void lineParserCallback(int current, int total)
 {
@@ -132,7 +147,9 @@ void parserThread(ParseArgs args)
 					&& !Utils::strEndsWith(fname, ".j")
 					&& !Utils::strEndsWith(fname, ".jass")
 					&& !Utils::strEndsWith(fname, ".cjass")
+					&& !Utils::strEndsWith(fname, ".vjass")
 					&& !Utils::strEndsWith(fname, ".cj")
+					&& !Utils::strEndsWith(fname, ".vj")
 					&& !Utils::strEndsWith(fname, ".jj")
 					&& !Utils::strEndsWith(fname, ".w3j")
 					&& !Utils::strEndsWith(fname, ".w3cj"))
@@ -156,7 +173,9 @@ void parserThread(ParseArgs args)
 					&& !Utils::strEndsWith(fname, ".j")
 					&& !Utils::strEndsWith(fname, ".jass")
 					&& !Utils::strEndsWith(fname, ".cjass")
+					&& !Utils::strEndsWith(fname, ".vjass")
 					&& !Utils::strEndsWith(fname, ".cj")
+					&& !Utils::strEndsWith(fname, ".vj")
 					&& !Utils::strEndsWith(fname, ".jj")
 					&& !Utils::strEndsWith(fname, ".w3j")
 					&& !Utils::strEndsWith(fname, ".w3cj"))
@@ -176,6 +195,7 @@ void parserThread(ParseArgs args)
 				setFilesParsed(fileCounter, filesTotal);
 			}
 			nodeParserCallback(-1, -1);
+			changeStatusColor(args.hwnd, RGB(10, 175, 10));
 			SetWindowTextA(args.status, "Status: Done!");
 			EnableWindow(args.button, true);
 			UpdateWindow(args.hwnd);
@@ -202,7 +222,9 @@ void parserThread(ParseArgs args)
 				SetWindowTextA(args.status, status2.c_str());
 				UpdateWindow(args.hwnd);
 				_parser->ToLua(args.out, nodeParserCallback);
+				nodeParserCallback(-1, -1);
 				setFilesParsed(1, 1);
+				changeStatusColor(args.hwnd, RGB(10, 175, 10));
 				SetWindowTextA(args.status, "Status: Done!");
 				EnableWindow(args.button, true);
 				UpdateWindow(args.hwnd);
@@ -215,6 +237,7 @@ void parserThread(ParseArgs args)
 	catch (const std::exception& ex)
 	{
 		appLog(Fatal) << ex.what();
+		changeStatusColor(args.hwnd, RGB(255, 0, 0));
 		SetWindowTextA(args.status, (std::string("Status: Error - ") + ex.what()).c_str());
 		EnableWindow(args.button, true);
 		UpdateWindow(args.hwnd);
@@ -255,7 +278,9 @@ void parse_thisThread(const std::string& in, const std::string& out)
 					&& !Utils::strEndsWith(fname, ".j")
 					&& !Utils::strEndsWith(fname, ".jass")
 					&& !Utils::strEndsWith(fname, ".cjass")
+					&& !Utils::strEndsWith(fname, ".vjass")
 					&& !Utils::strEndsWith(fname, ".cj")
+					&& !Utils::strEndsWith(fname, ".vj")
 					&& !Utils::strEndsWith(fname, ".jj")
 					&& !Utils::strEndsWith(fname, ".w3j")
 					&& !Utils::strEndsWith(fname, ".w3cj"))
@@ -339,14 +364,15 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 		//Begin constructing window
 		int ox = 10, oy = 4;
-		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Input file or directory"), hInstance, WS_VISIBLE, NULL, NULL, ox, oy, 350, 20, false);
+		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Input file or directory:"), hInstance, WS_VISIBLE, NULL, NULL, ox, oy, 125, 20, false);
+		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Hold SHIFT to browse a folder"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_SHIFT_MESSAGE), ox + 255, oy, 200, 20, false);
 		oy += 17;
-		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastInputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP | WS_DISABLED, NULL, HMENU(IDC_INPUT), ox, oy, 330, 23, false);
+		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastInputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_INPUT), ox, oy, 330, 23, false);
 		Utils::CreateWindowElement(hwnd, ET_BUTTON, TEXT("Browse"), hInstance, WS_VISIBLE | WS_TABSTOP | BS_FLAT, NULL, HMENU(IDC_BROWSE_INPUT), ox + 340, oy - 1, 60, 25, false);
 		oy += 27;
-		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Output file or directory"), hInstance, WS_VISIBLE, NULL, NULL, ox, oy, 350, 20, false);
+		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Output file or directory:"), hInstance, WS_VISIBLE, NULL, NULL, ox, oy, 350, 20, false);
 		oy += 17;
-		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastOutputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP | WS_DISABLED, NULL, HMENU(IDC_OUTPUT), ox, oy, 330, 23, false);
+		Utils::CreateWindowElement(hwnd, ET_EDIT, Settings::lastOutputPath.c_str(), hInstance, WS_VISIBLE | WS_BORDER | WS_TABSTOP, NULL, HMENU(IDC_OUTPUT), ox, oy, 330, 23, false);
 		Utils::CreateWindowElement(hwnd, ET_BUTTON, TEXT("Browse"), hInstance, WS_VISIBLE | WS_TABSTOP | BS_FLAT, NULL, HMENU(IDC_BROWSE_OUTPUT), ox + 340, oy - 1, 60, 25, false);
 		oy += 27;
 		Utils::CreateWindowElement(hwnd, ET_STATIC, TEXT("Status: Ready"), hInstance, WS_VISIBLE, NULL, HMENU(IDC_STATUS), ox, oy, 400, 25, false);
@@ -362,6 +388,9 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		ProgressControls::hFileProgress = Utils::CreateWindowElement(hwnd, ET_PROGRESS, TEXT(""), hInstance, WS_VISIBLE, NULL, HMENU(IDC_PROGRESS_FILES), ox, oy, 400, 20, false);
 		oy += 30;
 		Utils::CreateWindowElement(hwnd, ET_BUTTON, TEXT("Translate"), hInstance, WS_VISIBLE | WS_TABSTOP | BS_FLAT, NULL, HMENU(IDC_BUTTON), ox, oy, 400, 30, false);
+
+		SendDlgItemMessage(hwnd, IDC_INPUT, EM_SETREADONLY, 1, 0);
+		SendDlgItemMessage(hwnd, IDC_OUTPUT, EM_SETREADONLY, 1, 0);
 
 		//End constructing window
 
@@ -417,13 +446,23 @@ int main()
 
 		if (argCount > 1)
 		{
-			std::string out = "";
-			if (argCount > 2)
-				out = szArgList[2];
-			std::cout << "Starting parser..." << std::endl;
-			parse_thisThread(szArgList[1], out);
-			system("pause");
-			return 0;
+			try
+			{
+				std::string out = "";
+				if (argCount > 2)
+					out = szArgList[2];
+				std::cout << "Starting parser..." << std::endl;
+				parse_thisThread(szArgList[1], out);
+				system("pause");
+				return 0;
+			}
+			catch (const std::exception& ex)
+			{
+				appLog(Fatal) << ex.what();
+				std::cout << "Error: " << ex.what() << std::endl;
+				system("pause");
+				return -1;
+			}
 		}
 		else
 		{
@@ -446,40 +485,26 @@ int main()
 	}
 }
 
-std::string browse(HWND ouputWindow)
-{
-	BROWSEINFO bi;
-	CHAR szDisplayName[MAX_PATH];
-	LPITEMIDLIST pidl;
-	LPMALLOC  pMalloc = NULL;
-	ZeroMemory(&bi, sizeof(bi));
-	bi.hwndOwner = NULL;
-	bi.pszDisplayName = szDisplayName;
-	bi.lpszTitle = "Select folder/file or copy-paste a path:";
-	bi.ulFlags = BIF_BROWSEINCLUDEFILES | BIF_EDITBOX;
-	pidl = SHBrowseForFolder(&bi);
-
-	if (pidl)
-	{
-		SHGetPathFromIDList(pidl, szDisplayName);
-		SetWindowTextA(ouputWindow, szDisplayName);
-	}
-	else
-		return "";
-
-	return szDisplayName;
-}
-
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	ParseArgs args;
 	HWND btn, input, status, output;
+	HDC hdc;
 	input = GetDlgItem(hwnd, IDC_INPUT);
 	output = GetDlgItem(hwnd, IDC_OUTPUT);
 	status = GetDlgItem(hwnd, IDC_STATUS);
 	btn = GetDlgItem(hwnd, IDC_BUTTON);
 	auto wp = LOWORD(wParam);
 	std::string str;
+	bool isShiftDown = ((1 << 15) & GetAsyncKeyState(VK_SHIFT));
+
+	auto updateStaticColor = [](HDC hdc, COLORREF color) -> LRESULT
+	{
+		SetTextColor(hdc, color);
+		SetBkMode(hdc, TRANSPARENT);
+		SaveDC(hdc);
+		return LRESULT(CreateSolidBrush(RGB(240, 240, 240)));
+	};
 		
 	char buf[MAX_PATH];
 	GetWindowText(input, buf, sizeof(buf));
@@ -492,6 +517,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		PostQuitMessage(0);
 		quick_exit(0);
 		return 0;
+
+	case WM_CTLCOLOREDIT:
+	case WM_CTLCOLORSTATIC:
+		if (GetDlgCtrlID((HWND)lParam) == IDC_STATUS)
+			return updateStaticColor(reinterpret_cast<HDC>(wParam), g_statusColor);
+		else if (GetDlgCtrlID((HWND)lParam) == IDC_SHIFT_MESSAGE)
+			return updateStaticColor(reinterpret_cast<HDC>(wParam), RGB(0,0,255));
+		break;
 
 	case WM_COMMAND:
 		switch (wp)
@@ -510,13 +543,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			args.status = status;
 			args.hwnd = hwnd;
 			EnableWindow(btn, false);
+			changeStatusColor(args.hwnd, RGB(225, 150, 10));
 			SetWindowTextA(status, "Status: Starting parser...");
 			UpdateWindow(hwnd);
 			parse(args);
 			break;
 
 		case IDC_BROWSE_INPUT:
-			str = browse(input);
+			hdc = GetDC(status);
+			if (!isShiftDown)
+				str = Utils::browse(hwnd, input, FileDialogType::Open);
+			else
+				str = Utils::browse(hwnd, input, FileDialogType::SelectFolder);
 			if (str != "")
 			{
 				Settings::lastInputPath = str;
@@ -525,7 +563,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			break;
 
 		case IDC_BROWSE_OUTPUT:
-			str = browse(output);
+			if (!isShiftDown)
+				str = Utils::browse(hwnd, output, FileDialogType::Save);
+			else
+				str = Utils::browse(hwnd, output, FileDialogType::SelectFolder);
 			if (str != "")
 			{
 				Settings::lastOutputPath = str;
