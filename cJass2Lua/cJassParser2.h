@@ -23,7 +23,7 @@ namespace cJass
 		size_t						_wordPos;
 		std::string					_fileName;
 		bool						_strictMode;
-		std::vector<std::string>	_structNames;
+		std::vector<std::string>	_customTypeNames;
 
 		word_t classifyWord(const std::string& word);
 		Node* _addNode(cJass::Node::Type type, const std::vector<std::string> data, bool makeActive = false);

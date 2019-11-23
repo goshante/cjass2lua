@@ -21,6 +21,8 @@ namespace cJass
 			PRODUCING_NODE(Comment);
 			PRODUCING_NODE(OperationObject);
 			PRODUCING_NODE(LocalDeclaration);
+			PRODUCING_NODE(GlobalDeclaration);
+			PRODUCING_NODE(TypeDef);
 		default:
 			throw std::runtime_error("Error! Node RootNode cannot be produced!");
 		}
@@ -265,10 +267,10 @@ namespace cJass
 
 	RootNode::RootNode(OutputInterface& outIf)
 		: Node(outIf, Node::Type::RootNode, nullptr)
-		, _globals({})
 		, _totalNodes(1)
 		, _printedNodes(0)
 		, _notifyCallback(nullptr)
+		, _useCallback(false)
 	{
 		_root = this;
 	}
@@ -277,16 +279,6 @@ namespace cJass
 	{
 		CountAllNodes();
 
-		for (auto& var : _globals)
-		{
-			if (var.initValue == "" || var.initValue == "null")
-				_out << "-- " << var.type << " " << var.name << OutputInterface::nl;
-			else
-				_out << var.name << " = " << var.initValue << OutputInterface::nl;
-		}
-
-		_out << OutputInterface::nl;
-
 		for (auto& node : _subnodes)
 			node->ToLua();
 		TryToCreatePrintNotify();
@@ -294,38 +286,14 @@ namespace cJass
 
 	void RootNode::InitData(const std::vector<std::string>& strings)
 	{
-		size_t size = strings.size();
-		if (size % 3 != 0)
-		{
-			appLog(Critical) << "RootNode::InitData: Wrong set of input data. Got" << size << ", expected" << "3";
-			appLog(Debug) << "Args:" << strings;
-			return;
-		}
-
-		if (size == 0)
-			return;
-
-		variable_t var;
-		for (size_t i = 0; i < size; i++)
-		{
-			auto n = i + 1;
-			if (n % 3 == 0)
-			{
-				var.initValue = strings[i];
-				_globals.push_back(var);
-			}
-			else if (n % 2 == 0)
-				var.name = strings[i];
-			else
-				var.type = strings[i];
-
-		}
+		appLog(Warning) << "Attempting to initialize RootNode. Init is not needed.";
+		appLog(Debug) << strings;
 	}
 
 	void RootNode::TryToCreatePrintNotify()
 	{
 		_printedNodes++;
-		if (_notifyCallback != nullptr)
+		if (_useCallback)
 		{
 			(*_notifyCallback)(_printedNodes, _totalNodes);
 		}
@@ -345,6 +313,7 @@ namespace cJass
 
 	void RootNode::AddNotifyCallback(NotifyCallback callback)
 	{
+		_useCallback = true;
 		_notifyCallback = std::shared_ptr<std::function<void(int, int)>>(new std::function<void(int,int)>(callback));
 	}
 
@@ -355,7 +324,6 @@ namespace cJass
 		_totalNodes = 1;
 		_notifyCallback = nullptr;
 		_subnodes.clear();
-		_globals.clear();
 		_strIds.clear();
 		ResetIterator();
 	}
@@ -375,6 +343,107 @@ namespace cJass
 		return false;
 	}
 
+	GlobalDeclaration::GlobalDeclaration(OutputInterface& outIf, Node* top)
+		: Node(outIf, Node::Type::GlobalDeclaration, top)
+		, _varType("")
+		, _varName("")
+		, _isNative(false)
+		, _isArray(false)
+	{
+		_depthIndex = 1;
+	}
+
+	void GlobalDeclaration::CountAllNodes()
+	{
+		_root->IncrementNodeCount(_subnodes.size());
+		for (auto& node : _subnodes)
+			node->CountAllNodes();
+	}
+
+	void GlobalDeclaration::ToLua()
+	{
+		bool emmy = Settings::emmyDoc();
+
+		if (_varType == "macro_def")
+		{
+			Node* deepest = this;
+
+			while (deepest->CountSubnodes() != 0)
+				deepest = deepest->AtNode(0)->Ptr();
+
+			if (deepest->GetType() == Node::Type::OperationObject
+				&& deepest->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Constant)
+			{
+				auto ctype = _subnodes[0]->AtNode(0)->Ptr<OperationObject>()->GetConstType();
+				switch (ctype)
+				{
+				case OperationObject::ConstType::Bool:
+					_varType = "boolean";
+					break;
+
+				case OperationObject::ConstType::Float:
+					_varType = "real";
+					break;
+
+				case OperationObject::ConstType::RawCode:
+				case OperationObject::ConstType::Integer:
+					_varType = "integer";
+					break;
+
+				case OperationObject::ConstType::String:
+					_varType = "string";
+					_root->InsertStringId(_varName);
+					break;
+				}
+			}
+		}
+
+		_out << OutputInterface::nl;
+
+		if (_isArray)
+			_out << _varName << " = {}";
+		else if (CountSubnodes() > 0)
+		{
+			_out << _varName << " = ";
+			_subnodes[0]->ToLua();
+		}
+		else
+			_out << "-- " << _varName;
+
+		if (emmy)
+			_out << "\t" << "---@type " << _varType;
+
+		if (_isNative)
+			_out << " (native) ";
+
+		_out << "\t";
+
+		if (_root)
+			_root->TryToCreatePrintNotify();
+	}
+
+	void GlobalDeclaration::InitData(const std::vector<std::string>& strings)
+	{
+		size_t size = strings.size();
+		if (size != 3 && size != 2)
+		{
+			appLog(Critical) << "GlobalDeclaration::InitData: Wrong set of input data. Got" << size << ", expected" << "2 or 3";
+			appLog(Debug) << "Args:" << strings;
+			return;
+		}
+
+		_varType = strings[0];
+		_varName = strings[1];
+		if (_varName == "end")
+			_varName = "end_";
+
+		if (size == 3 && strings[2].find("native") != std::string::npos)
+			_isNative = true;
+
+		if (size == 3 && strings[2].find("array") != std::string::npos)
+			_isArray = true;
+	}
+
 	Comment::Comment(OutputInterface& outIf, Node* top)
 		: Node(outIf, Node::Type::Comment, top)
 		, _comment("")
@@ -385,16 +454,19 @@ namespace cJass
 	{
 		size_t end = _comment.length() - 1;
 		bool multiline = false;
-		size_t n, r;
+		size_t n = std::string::npos, r = std::string::npos;
 		std::string tmp = _comment;
+		bool rootComment = Top()->GetType() == Node::Type::RootNode;
 		if (_comment.length() >= 2)
 		{
 			tmp = reu::IndexSubstr(_comment, 1, end);
-			r = tmp.find("\r");
+			if (end != 0)
+				r = (_comment[0] == '\r' ? 0 : std::string::npos);
 			n = tmp.find("\n");
-			multiline = ((r != std::string::npos) || (n != std::string::npos));
+			multiline = (((r != std::string::npos) || (n != std::string::npos)) && (r != 0 && n != 0));
 		}
 		n = _comment.find("\n");
+
 		if (n == 0 && end == 0)
 		{
 			if (_root)
@@ -402,28 +474,31 @@ namespace cJass
 			return;
 		}
 
-
-		if (n == 0)
+		if (r == 0)
 		{
+			_comment = _comment.substr(2, _comment.length() - 2);
 			_out << OutputInterface::nl;
-			if (Top()->GetType() != Node::Type::RootNode)
+
+			if (!rootComment)
 				PrintTabs();
 		}
-		else
+		else if (n == 0)
 		{
-			tmp = _comment;
-			_out << "\t";
+			_comment = _comment.substr(1, _comment.length() - 1);
+			_out << OutputInterface::nl;
+
+			if (!rootComment)
+				PrintTabs();
 		}
+		else if (!multiline && !rootComment)
+			_out << "\t";
+
+		tmp = _comment;
 		
 		if (multiline)
-			_out << "--[[" << OutputInterface::nl << tmp << OutputInterface::nl << "]]--" << OutputInterface::nl;
+			_out << OutputInterface::nl << "--[[" << OutputInterface::nl << tmp << OutputInterface::nl << "]]--" << OutputInterface::nl;
 		else
 			_out << "-- " << tmp;
-
-		if (Top()->Top() == nullptr)
-		{
-			_out << OutputInterface::nl;
-		}
 
 		if (_root)
 			_root->TryToCreatePrintNotify();
@@ -462,12 +537,34 @@ namespace cJass
 		, _name("")
 		, _returnType("")
 		, _args({})
+		, _isNative(false)
 	{
 		_isBlock = true;
 	}
 
 	void Function::ToLua()
 	{
+		bool emmy = Settings::emmyDoc();
+
+		if (emmy)
+		{
+			if (_args.size() > 0)
+				_out << OutputInterface::nl;
+			std::string tmp;
+			for (size_t i = 0; i < _args.size(); i++)
+			{
+				if ((i+1) % 2 != 0)
+				{
+					tmp = _args[i];
+					continue;
+				}
+
+				if ((i + 1) % 2 == 0)
+					_out << OutputInterface::nl << "---@param " << _args[i] << " " << tmp;
+			}
+			_out << OutputInterface::nl << "---@return " << _returnType;
+		}
+		
 		_out << OutputInterface::nl << "function " << _name << "(";
 		
 		if (_args.size() == 0)
@@ -489,10 +586,15 @@ namespace cJass
 			}
 		}
 
-		for (auto& node : _subnodes)
-			node->ToLua();
-
-		_out << OutputInterface::nl << "end" << OutputInterface::nl;
+		if (!_isNative)
+		{
+			for (auto& node : _subnodes)
+				node->ToLua();
+			_out << OutputInterface::nl << "end" << OutputInterface::nl;
+		}
+		else
+			_out << " end\t-- (native)" << OutputInterface::nl;
+		
 
 		if (_root)
 			_root->TryToCreatePrintNotify();
@@ -516,18 +618,27 @@ namespace cJass
 		}
 
 		_returnType = strings[0];
+		if (_returnType[0] == '!')
+		{
+			_returnType = _returnType.substr(1, _returnType.length() - 1);
+			_isNative = true;
+		}
 		_name = strings[1];
 		_depthIndex++;
 		bool insStr = false;
 
+		std::string tmp;
 		for (size_t i = 2; i < size; i++)
 		{
-			_args.push_back(strings[i]);
-			if (i % 2 == 0 && strings[i] == "string")
+			tmp = strings[i];
+			if (tmp == "end")
+				tmp = "end_";
+			_args.push_back(tmp);
+			if (i % 2 == 0 && tmp == "string")
 				insStr = true;
 			if (i % 2 != 0 && insStr)
 			{
-				_strIds.push_back(strings[i]);
+				_strIds.push_back(tmp);
 				insStr = false;
 			}
 		}
@@ -698,6 +809,11 @@ namespace cJass
 
 			if (_inBrackets)
 				_out << ")";
+			break;
+
+		case OpType::GVarInitWrapper:
+			for (auto& node : _subnodes)
+				node->ToLua();
 			break;
 
 		case OpType::Return:
@@ -899,7 +1015,8 @@ namespace cJass
 
 		case OpType::NewLine:
 			_out << OutputInterface::nl;
-			PrintTabs();
+			if (Top()->GetType() != Node::Type::RootNode)
+				PrintTabs();
 			break;
 		
 		default:
@@ -953,6 +1070,8 @@ namespace cJass
 		case 'I':
 			_otype = OpType::Id;
 			_opText = strings[1];
+			if (_opText == "end")
+				_opText = "end_";
 			_isString = CheckIsString();
 			break;
 
@@ -1070,6 +1189,10 @@ namespace cJass
 			_isString = CheckIsString();
 			break;
 
+		case 'g':
+			_otype = OpType::GVarInitWrapper;
+			_isWrapper = true;
+			break;
 		case 'W':
 			_otype = OpType::Wrapper; 
 			_isWrapper = true;
@@ -1089,7 +1212,7 @@ namespace cJass
 
 	}
 
-	bool  OperationObject::HasNeighbourStrings()
+	bool OperationObject::HasNeighbourStrings()
 	{
 		Node* top = _top;
 		size_t this_index = 9999999;
@@ -1192,6 +1315,11 @@ namespace cJass
 			appLog(Critical) << "OperationObject::HasNeighbourStrings: Root node not found.";
 
 		return false;
+	}
+
+	OperationObject::ConstType OperationObject::GetConstType() const
+	{
+		return _cType;
 	}
 
 	OperationObject::OpType OperationObject::GetOpType() const
@@ -1330,11 +1458,50 @@ namespace cJass
 	Node* LocalDeclaration::AddVariable(const std::string& name, const std::string& arrSize)
 	{
 		appLog(Debug) << "Adding local variable" << name;
-		_vars.push_back(name);
+		if (name == "end")
+			_vars.push_back(name + "_");
+		else
+			_vars.push_back(name);
 		_arrSizes.push_back(arrSize);
 		auto node = Node::Produce(Node::Type::OperationObject, this, _out);
 		node->InitData({ "v" });
 		AddSubnode(node);
 		return node->Ptr();
 	}
+
+	TypeDef::TypeDef(OutputInterface& outIf, Node* top) 
+		: Node(outIf, Node::Type::TypeDef, top)
+		, _nativeName("")
+		, _extends("")
+	{
+	}
+
+	void TypeDef::CountAllNodes()
+	{
+	}
+
+	void TypeDef::ToLua()
+	{
+		if (!Settings::emmyDoc())
+			return;
+
+		_out << OutputInterface::nl << "---@class  " << _nativeName;
+		if (_extends != "")
+			_out << ":" << _extends << " ";
+	}
+
+	void TypeDef::InitData(const std::vector<std::string>& strings)
+	{
+		size_t size = strings.size();
+		if (size != 2)
+		{
+			appLog(Critical) << "TypeDef::InitData: Wrong set of input data. Got" << size << ", expected" << "2";
+			appLog(Debug) << "Args:" << strings;
+			return;
+		}
+
+		_nativeName = strings[0];
+		_extends = strings[1];
+	}
+
 } //namespace cJass

@@ -8,6 +8,8 @@ Warcraft III Reforged brought us Lua scripting, but still a lot of map makers fo
 - Analyzing and syntax checking cJass code
 - Full support of JASS/cJASS
 - Producing .lua file with converted code of your cJass/JASS code
+- Advanced JASS features such as 'native', 'constant', 'type'
+- emmyDoc option for lua
 - Single file conversion
 - Smart string decection (constants, locals, globals, declared functions) and smart replacing string concatenation operator
 - Supports mixed code of cJass/JASS. It is fully recognizable.
@@ -38,13 +40,13 @@ Warcraft III Reforged brought us Lua scripting, but still a lot of map makers fo
 - Read logs if something goes wrong, this application leaves cjass2lua.log file with all it's actions and possible problems. Everything should be fine if you have no warnings.
 
 ### Latest release
-- [v1.07](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.07)
+- [v1.08](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.08)
 
 ### Manual
 #### GUI
-1. Enter destination path of cJass text file (or folder with cJass files)
-2. Enter destination path of output Lua file (or folder) to save Lua file(s)
-3. Click Translate
+1. Click Browse to open input file (or hold SHIFT and click Browse to select input folder)
+2. Click Browse to save future .lua script (or hold SHIFT and click Browse to select output folder)
+3. Click Translate and wait
 #### Console
 - First argument is input file or folder (necessary)
 - Second argument is output file or folder (optional)
@@ -58,6 +60,7 @@ Warcraft III Reforged brought us Lua scripting, but still a lot of map makers fo
 - StrictMode - Can be TRUE or FALSE. If TRUE - you must close every operation with ';'. Causes errors when ';' is missing. If FALSE - new line is an end for operation (but ';' is also accepted).
 - DoNotIncrementArrayIndexConstants - Can be TRUE or FALSE. If TRUE - array constant integer indexes are not changed. If FALSE - they are incremented by 1. Cuz in Lua first array index is 1 instead of 0.
 - ClearLogsOnNewTranslate - Clear logs on every next translation.
+- UseEmmyDocAnnotations - Can be TRUE or FALSE. If TRUE - functions, natives, types, constants, globals and defines will be marked with emmyDoc comment sections.
 
 - 'Pathes' settings block - last used input and output pathes
 

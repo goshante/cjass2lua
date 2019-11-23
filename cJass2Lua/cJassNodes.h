@@ -9,13 +9,6 @@
 
 namespace cJass
 {
-	struct variable_t
-	{
-		std::string type;
-		std::string name;
-		std::string initValue;
-	};
-
 	class Node
 	{
 	public:
@@ -26,13 +19,16 @@ namespace cJass
 			Function,
 			Comment,
 			OperationObject,
-			LocalDeclaration
+			LocalDeclaration,
+			GlobalDeclaration,
+			TypeDef
 		};
 
 		friend class Comment;
 		friend class Function;
 		friend class OperationObject;
 		friend class LocalDeclaration;
+		friend class GlobalDeclaration;
 		friend class RootNode;
 
 	protected:
@@ -94,13 +90,14 @@ namespace cJass
 		friend class Function;
 		friend class OperationObject;
 		friend class LocalDeclaration;
+		friend class GlobalDeclaration;
 
 	private:
-		std::vector<variable_t>								_globals;
 		std::vector<std::string>							_strIds;
 		int													_totalNodes;
 		int													_printedNodes;
 		std::shared_ptr<std::function<void(int,int)>>		_notifyCallback;
+		bool												_useCallback;
 	
 	protected:
 		void IncrementNodeCount(size_t i);
@@ -131,6 +128,40 @@ namespace cJass
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
 
+	class GlobalDeclaration : public Node
+	{
+	private:
+		std::string		_varType;
+		std::string		_varName;
+		bool			_isNative;
+		bool			_isArray;
+		
+	protected:
+		virtual void CountAllNodes() override;
+
+	public:
+		GlobalDeclaration(OutputInterface& outIf, Node* top);
+
+		virtual void ToLua() override;
+		virtual void InitData(const std::vector<std::string>& strings) override;
+	};
+
+	class TypeDef : public Node
+	{
+	private:
+		std::string		_nativeName;
+		std::string		_extends;
+
+	protected:
+		virtual void CountAllNodes() override;
+
+	public:
+		TypeDef(OutputInterface& outIf, Node* top);
+
+		virtual void ToLua() override;
+		virtual void InitData(const std::vector<std::string>& strings) override;
+	};
+
 	class Function : public Node
 	{
 	private:
@@ -138,6 +169,7 @@ namespace cJass
 		std::string					_returnType;
 		std::vector<std::string>	_args;
 		std::vector<std::string>	_strIds;
+		bool						_isNative;
 
 	protected:
 		virtual void CountAllNodes() override;
@@ -187,7 +219,8 @@ namespace cJass
 			Wrapper,			//General wrapper for operations like call, assignment and return
 			Logic,				//Wrapper for logical blocks
 			VarInitExpression,  //Wrapper for local variable initializer
-			Argument			//Wrapper for an argument of function call
+			Argument,			//Wrapper for an argument of function call
+			GVarInitWrapper		//Wrapper to init global variable
 		};
 
 		enum class ConstType
@@ -226,6 +259,7 @@ namespace cJass
 		void CloseBlock();
 		bool CheckIsString();
 		bool HasNeighbourStrings();
+		ConstType GetConstType() const;
 	};
 
 	class LocalDeclaration : public Node

@@ -13,6 +13,7 @@ OutputInterface::OutputInterface()
 	, _strPtr(nullptr)
 	, _nl("\r\n")
 	, _mode(FileMode::CreateAlways)
+	, _directWrite(true)
 {
 }
 
@@ -21,6 +22,7 @@ OutputInterface::OutputInterface(Type type, NewLineType nlType, std::string& fil
 	, _file(nullptr)
 	, _strPtr(nullptr)
 	, _mode(mode)
+	, _directWrite(true)
 {
 	UINT umode = 0;
 	switch (mode)
@@ -80,6 +82,7 @@ OutputInterface::OutputInterface(Type type, NewLineType nlType, FileMode mode)
 	, _file(nullptr)
 	, _strPtr(nullptr)
 	, _mode(mode)
+	, _directWrite(true)
 {
 	switch (nlType)
 	{
@@ -167,11 +170,25 @@ void OutputInterface::SetOutputFile(const std::string& fname)
 			umode = CREATE_ALWAYS;
 	}
 
+	UINT ff = FILE_ATTRIBUTE_NORMAL;
+	if (_directWrite)
+		ff |= FILE_FLAG_WRITE_THROUGH;
+
 	HANDLE hFile = CreateFileA(fname.c_str(), GENERIC_WRITE, FILE_SHARE_READ, NULL,
-		umode, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, NULL);
+		umode, ff, NULL);
 	if (hFile == 0 || hFile == HANDLE(~0))
 		throw std::runtime_error("OutputInterface::OutputInterface: Cannot open file " + fname + " for writing.");
 	_file = std::shared_ptr<WinHandle>(new WinHandle(hFile));
+}
+
+void OutputInterface::SetDirectWrite(bool enable)
+{
+	_directWrite = enable;
+}
+
+std::string OutputInterface::genNl() const
+{
+	return _nl;
 }
 
 void OutputInterface::Close()

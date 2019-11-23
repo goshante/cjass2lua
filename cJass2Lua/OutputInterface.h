@@ -52,6 +52,7 @@ protected:
 	std::string*					_strPtr;
 	std::string						_nl;
 	FileMode						_mode;
+	bool							_directWrite;
 
 	virtual void _toOutput(const std::string& str);
 
@@ -68,6 +69,8 @@ public:
 	bool IsReady() const;
 	void Close();
 	void SetOutputFile(const std::string& fname);
+	void SetDirectWrite(bool enable);
+	std::string genNl() const;
 
 	OutputInterface& operator<<(const std::string& str);
 	OutputInterface& operator<<(const NewLine&);
