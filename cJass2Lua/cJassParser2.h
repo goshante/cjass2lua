@@ -26,10 +26,11 @@ namespace cJass
 		std::vector<std::string>	_customTypeNames;
 
 		word_t classifyWord(const std::string& word);
-		Node* _addNode(cJass::Node::Type type, const std::vector<std::string> data, bool makeActive = false);
+		Node* _addNode(cJass::Node::Type type, const std::vector<std::string> data = {}, bool makeActive = false);
 		Node* _addNode(std::shared_ptr<cJass::Node> node, bool makeActive = false);
 		void _pop();
 		size_t _depth() const;
+		bool _isCustomType(const std::string& typeName) const;
 
 	public:
 		Parser2();

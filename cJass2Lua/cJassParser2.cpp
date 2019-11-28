@@ -1,6 +1,7 @@
 #include "cJassParser2.h"
 #include <sstream>
 #include <shlobj_core.h>
+#include <cassert>
 
 #include "reutils.h"
 #include "Utils.h"
@@ -159,6 +160,30 @@ namespace cJass
 				return word_t::type;
 		}
 
+		if (word == "class" || word == "struct")
+			return word_t::structure;
+
+		if (word == "endstruct")
+			return word_t::endstruct;
+
+		if (word == "method")
+			return word_t::method;
+
+		if (word == "endmethod")
+			return word_t::endmethod;
+
+		if (word == "this")
+			return word_t::This;
+
+		if (word == "private")
+			return word_t::priv;
+
+		if (word == "public")
+			return word_t::pub;
+
+		if (word == "static")
+			return word_t::Static;
+
 		if (word == "type")
 			return word_t::type_keyword;
 
@@ -208,7 +233,8 @@ namespace cJass
 			|| word == ">"
 			|| word == "<"
 			|| word == "<="
-			|| word == ">=")
+			|| word == ">="
+			|| word == "->")
 		{
 			return word_t::op;
 		}
@@ -388,7 +414,8 @@ namespace cJass
 	Node* Parser2::_addNode(cJass::Node::Type type, const std::vector<std::string> data, bool makeActive)
 	{
 		auto node = Node::Produce(type, _activeNode, _outIf);
-		node->InitData(data);
+		if (data.size() > 0)
+			node->InitData(data);
 		_activeNode->AddSubnode(node);
 		_lastAddedNode = node->Ptr();
 		if (makeActive)
@@ -448,7 +475,10 @@ namespace cJass
 		_activeNode = &_rootNode;
 		_lastAddedNode = _activeNode;
 		_rootNode.Clear();
+		_customTypeNames.clear();
 		reu::ReplaceAll(_text, "\\.evaluate", "");
+		reu::ReplaceAll(_text, "([^a-zA-Z_0-9\\[\\]])\\.", "$1");
+		reu::ReplaceAll(_text, "this\\.", "");
 		auto lt = reu::SearchAll(_text, "[\\n]");
 		linesTotal = lt.Count() + 1;
 		_fileName = cjassFileName;
@@ -502,9 +532,17 @@ namespace cJass
 			static bool						isGlobalInit = false;
 			static size_t					native = std::string::npos;
 			static bool						getReadyToEndStatement = false;
+			static bool						isParsingClass = false;
+			static bool						classInitialized = false;
+			static bool						isStatic = false;
+			static bool						ignoreClassFlag = false;
+			static bool						memberDeclaration = false;
+			static bool						memberInitValue = false;
+			static bool						methodDeclaration = false;
 			bool							isNative = false;
 			bool							doNotPutNewLine = false;
 			bool							goBackToComment = false;
+			bool							goBackToExpClose = false;
 
 			if (clearStatic)
 			{
@@ -541,6 +579,13 @@ namespace cJass
 				isGlobalInit = false;
 				native = std::string::npos;
 				getReadyToEndStatement = false;
+				isParsingClass = false;
+				classInitialized = false;
+				isStatic = false;
+				ignoreClassFlag = false;
+				memberDeclaration = false;
+				memberInitValue = false;
+				methodDeclaration = false;
 			}
 			
 			auto pops = [this, &subjectStack]() -> void
@@ -609,6 +654,7 @@ namespace cJass
 						&& subjectStack.top() != ParseSpecialSubject::globals
 						&& subjectStack.top() != ParseSpecialSubject::type
 						&& subjectStack.top() != ParseSpecialSubject::constant
+						&& !isParsingClass
 						&& !arraysDecl)
 						goto parseWordEnd;
 
@@ -762,19 +808,171 @@ namespace cJass
 					if (!(isLineComment && wtype == word_t::nl))
 						wtype = word_t::comment;
 				}
-					
 			}
 
-			if (_depth() == 0)
+			if (_depth() == 1 && isParsingClass)	//Parsing struct and classes space
+			{
+				auto class_ = _activeNode->Ptr<Class>();
+
+				if (_word == "]")
+				{
+					ignoreClassFlag = false;
+					goto parseWordEnd;
+				}
+
+				if (ignoreClassFlag || _word == "{" || _word == "private" || _word == "public")
+					goto parseWordEnd;
+
+				if (_word == "}" || _word == "endstruct" || _word == "endclass")
+				{
+					isParsingClass = false;
+					classInitialized = false;
+					_pop();
+					goto parseWordEnd;
+				}
+
+				if (!classInitialized && wtype == word_t::id)
+				{
+					_activeNode->InitData({ _word });
+					classInitialized = true;
+					_customTypeNames.push_back(_word);
+					goto parseWordEnd;
+				}
+
+				if (_word == "static")
+				{
+					isStatic = true;
+					goto parseWordEnd;
+				}
+
+				if (_word == "array")
+				{
+					arraysDecl = true;
+					if (memberDeclaration)
+						vec_arg[0] = "array";
+					goto parseWordEnd;
+				}
+
+				if (_word == "[")
+				{
+					arraysDecl = true;
+					ignoreClassFlag = true;
+					goto parseWordEnd;
+				}
+
+				//memberInitValue
+				if (wtype == word_t::type && !methodDeclaration)
+				{
+					memberDeclaration = true;
+					if (arraysDecl)
+						vec_arg.push_back("array");
+					else
+						vec_arg.push_back("");
+					vec_arg.push_back(_word);
+					goto parseWordEnd;
+				}
+
+				if (_word == "method")
+				{
+					vec_arg.clear();
+					vec_arg.push_back("");
+					returns = false;
+					takes = false;
+					methodDeclaration = true;
+					goto parseWordEnd;
+				}
+
+				if (memberDeclaration)
+				{
+					if (_word == "=")
+					{
+						memberInitValue = true;
+						vec_arg.push_back("");
+						goto parseWordEnd;
+					}
+
+					if (wtype == word_t::nl || wtype == word_t::end)
+					{
+						if (vec_arg.size() == 3)
+							vec_arg.push_back("");
+						class_->RegMember(vec_arg, isStatic);
+						memberDeclaration = false;
+						memberInitValue = false;
+						arraysDecl = false;
+						isStatic = false;
+						vec_arg.clear();
+						goto parseWordEnd;
+					}
+
+					if (memberInitValue)
+					{
+						vec_arg[vec_arg.size() - 1] += _word;
+						goto parseWordEnd;
+					}
+
+					if (wtype == word_t::id)
+						vec_arg.push_back(_word);
+
+					goto parseWordEnd;
+				}
+				else if (methodDeclaration)
+				{
+					if (!takes && wtype == word_t::id)
+					{
+						vec_arg.push_back(_word);
+						goto parseWordEnd;
+					}
+
+					if (_word == "takes")
+					{
+						takes = true;
+						goto parseWordEnd;
+					}
+
+					if (_word == "returns")
+					{
+						returns = true;
+						goto parseWordEnd;
+					}
+
+					if (returns)
+					{
+						vec_arg[0] = _word;
+						_activeNode = class_->RegMethod(vec_arg, isStatic);
+						_lastAddedNode = _activeNode;
+						funcNode = _activeNode;
+						wrapperStateStack.push(false);
+						allowWrappersStack.push(true);
+						varAddedStack.push(false);
+						unclosedOpStack.push(false);
+						if (vec_arg[0] == "string")
+							_rootNode.InsertStringId(vec_arg[1]);
+						vec_arg.clear();
+						takes = false;
+						returns = false;
+						isStatic = false;
+						methodDeclaration = false;
+						goto parseWordEnd;
+					}
+
+					if (takes && (wtype == word_t::id || wtype == word_t::type) && _word != "nothing" && _word != "void")
+					{
+						vec_arg.push_back(_word);
+						goto parseWordEnd;
+					}
+				}
+				goto parseWordEnd;
+			}
+			else if (_depth() == 0)	//Parsing global space
 			{
 				if (_word == "library" 
 					|| _word == "endlibrary" 
 					|| _word == "module" 
 					|| _word == "endmodule" 
 					|| _word == "scope"
-					|| _word == "endscope")
+					|| _word == "endscope")	//Who needs this shit?!
 				{
-					ignoreLine = true;
+					ignoreLine = true; //Ignore unsupported lines
 					goto parseWordEnd;
 				}
 
@@ -1049,7 +1247,14 @@ namespace cJass
 				}
 				else if (subjectStack.top() == ParseSpecialSubject::none)
 				{
-					if (_word == "globals")
+					if (_word == "struct" || _word == "class")
+					{
+						isParsingClass = true;
+						appLog(Debug) << "Parsing class";
+						vec_arg.clear();
+						_addNode(Node::Type::Class, {}, true);
+					}
+					else if (_word == "globals")
 					{
 						appLog(Debug) << "Parsing globals";
 						subjectStack.push(ParseSpecialSubject::globals);
@@ -1102,7 +1307,7 @@ namespace cJass
 					}
 				}
 			}
-			else
+			else //Parsing function or method space
 			{
 				bool isLocalTop = _activeNode->GetType() == Node::Type::LocalDeclaration;
 				bool isVarExprTop = (_activeNode->GetType() == Node::Type::OperationObject
@@ -1188,12 +1393,13 @@ namespace cJass
 					bstack_set_top(allowWrappersStack, false);
 					break;
 
+				case word_t::This:
 				case word_t::id:
 					if (isLocalTop && !varAddedStack.top())
 					{
 						varName = _word;
 						if (localType == "string")
-							funcNode->Ptr<Function>()->InsertStringId(varName);
+							funcNode->InsertStringId(varName);
 					}
 					else
 					{
@@ -1238,10 +1444,14 @@ namespace cJass
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::VarInitExpression
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Index
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Return
+							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Wrapper
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::DoStatement
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::ExitWhen) && !lambda)
 					{
-						appLog(Warning) << "Unexpected typename" << _word << DOC_LINEPOS;
+						if (_isCustomType(_word))
+							_addNode(Node::Type::OperationObject, { "I", _word });
+						else
+							appLog(Warning) << "Unexpected typename" << _word << DOC_LINEPOS;
 						goto parseWordEnd;
 					}
 
@@ -1273,7 +1483,23 @@ namespace cJass
 					break;
 
 				case word_t::op:
-					if (isLocalTop && _word == "=")
+					if (_word == "->")
+					{
+						if (_activeNode->CountSubnodes() > 0
+							&& _activeNode->LastSubnode()->GetType() == Node::Type::OperationObject
+							&& _activeNode->LastSubnode()->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Expression)
+						{
+							_activeNode->LastSubnode()->InitData({ "l", "void" });
+							_activeNode = _activeNode->LastSubnode();
+							wrapperStateStack.push(false);
+							allowWrappersStack.push(true);
+							varAddedStack.push(false);
+							unclosedOpStack.push(false);
+						}
+						else
+							appLog(Warning) << "Wrong usage of operator ->" << DOC_LINEPOS;
+					}
+					else if (isLocalTop && _word == "=")
 					{
 						_activeNode = _activeNode->Ptr<LocalDeclaration>()->AddVariable(varName, varArrSize);
 						bstack_set_top(varAddedStack, true);
@@ -1379,6 +1605,22 @@ namespace cJass
 					if (lambda)
 						goto parseWordEnd;
 
+					if (_activeNode->GetType() == Node::Type::OperationObject
+						&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Lambda
+							|| (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Wrapper
+								&& _activeNode->Top()->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Lambda)))
+					{
+
+						if (wrapperStateStack.top())
+							bstack_set_top(wrapperStateStack, false);
+						bstack_set_top(unclosedOpStack, false);
+						_pop();
+						tryToPutNewLine();
+						goBackToExpClose = true;
+						goto _blockEnd;
+						break;
+					}
+					_expClose:
 					if (_activeNode->GetType() == Node::Type::OperationObject
 						&& (_activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Call
 							|| _activeNode->Ptr<OperationObject>()->GetOpType() == OperationObject::OpType::Argument))
@@ -1867,6 +2109,8 @@ namespace cJass
 						
 					break;
 
+				case word_t::endmethod:
+				case word_t::endstruct:
 				case word_t::endfunction:
 				case word_t::endif:
 				case word_t::endloop:
@@ -1885,15 +2129,24 @@ namespace cJass
 					if (_depth() == 1)
 					{
 						if (_activeNode->GetType() != Node::Type::Function)
-							throw std::runtime_error("Top node must be function, but it is not!");
+							throw std::runtime_error("Top node must be function or method, but it is not!");
 						funcNode = nullptr;
+						isStatic = false;
 						appLog(Debug) << "End parsing function";
+					}
+					else if (isParsingClass && _depth() == 2)
+					{
+						funcNode = nullptr;
+						isStatic = false;
+						appLog(Debug) << "End parsing method";
 					}
 					_pop();
 					wrapperStateStack.pop();
 					allowWrappersStack.pop();
 					varAddedStack.pop();
 					unclosedOpStack.pop();
+					if (goBackToExpClose)
+						goto _expClose;
 					break;
 
 				case word_t::type_keyword:
@@ -2176,5 +2429,15 @@ namespace cJass
 	size_t Parser2::_depth() const
 	{
 		return _activeNode->GetDepth();
+	}
+
+	bool Parser2::_isCustomType(const std::string& typeName) const
+	{
+		for (auto& cname : _customTypeNames)
+		{
+			if (cname == typeName)
+				return true;
+		}
+		return false;
 	}
 } //namespace cJass
