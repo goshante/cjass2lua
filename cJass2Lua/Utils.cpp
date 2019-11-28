@@ -341,7 +341,9 @@ namespace Utils
 			return cJass::OperationObject::ConstType::null;
 		else if (cjConst == "true" || cjConst == "false")
 			return cJass::OperationObject::ConstType::Bool;
-		else if (reu::IsMatching(cjConst, "^[0-9]*\\.[0-9]*$"))
+		else if (reu::IsMatching(cjConst, "^[0-9]*\\.[0-9]*$") 
+			|| reu::IsMatching(cjConst, "^0x[0-9a-fA-F]+$")
+			|| reu::IsMatching(cjConst, "^\\$[0-9a-fA-F]+$"))
 			return cJass::OperationObject::ConstType::Float;
 		else if (reu::IsMatching(cjConst, "^[0-9]+$"))
 			return cJass::OperationObject::ConstType::Integer;

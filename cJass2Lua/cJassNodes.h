@@ -3,6 +3,7 @@
 #include "defs.h"
 #include <memory>
 #include <Windows.h>
+#include <set>
 #include <functional>
 
 #include "OutputInterface.h"
@@ -21,7 +22,9 @@ namespace cJass
 			OperationObject,
 			LocalDeclaration,
 			GlobalDeclaration,
-			TypeDef
+			TypeDef,
+			Class,
+			Method
 		};
 
 		friend class Comment;
@@ -30,6 +33,8 @@ namespace cJass
 		friend class LocalDeclaration;
 		friend class GlobalDeclaration;
 		friend class RootNode;
+		friend class Class;
+		friend class Method;
 
 	protected:
 		bool				_isNewLine;
@@ -82,17 +87,23 @@ namespace cJass
 
 		virtual void ToLua() = 0;
 		virtual void InitData(const std::vector<std::string>& strings) = 0;
+		virtual void InsertStringId(const std::string& strId) {}
+		virtual bool HasStringId(const std::string& strId) const { return false;  }
 	};
 
 	class RootNode : public Node
 	{
 	public:
+		friend class Node;
 		friend class Function;
 		friend class OperationObject;
 		friend class LocalDeclaration;
 		friend class GlobalDeclaration;
+		friend class Class;
+		friend class Method;
 
 	private:
+		std::set<std::string>								_globalIdSet;
 		std::vector<std::string>							_strIds;
 		int													_totalNodes;
 		int													_printedNodes;
@@ -102,13 +113,15 @@ namespace cJass
 	protected:
 		void IncrementNodeCount(size_t i);
 		virtual void CountAllNodes() override;
+		void AddGlobalId(const std::string& id);
+		void AssertGlobalId(const std::string& id);
 		 
 	public:
 		RootNode(OutputInterface& outIf);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
-		void InsertStringId(const std::string& strId);
-		bool HasStringId(const std::string& str) const;
+		void InsertStringId(const std::string& strId) override;
+		bool HasStringId(const std::string& str) const override;
 		void TryToCreatePrintNotify();
 		void AddNotifyCallback(NotifyCallback callback);
 		void Clear();
@@ -140,6 +153,8 @@ namespace cJass
 		virtual void CountAllNodes() override;
 
 	public:
+		friend class Node;
+
 		GlobalDeclaration(OutputInterface& outIf, Node* top);
 
 		virtual void ToLua() override;
@@ -162,10 +177,71 @@ namespace cJass
 		virtual void InitData(const std::vector<std::string>& strings) override;
 	};
 
-	class Function : public Node
+	class Class : public Node
+	{
+	public:
+		struct ClassMember_t
+		{
+			std::string type;
+			std::string name;
+			std::string initValue;
+			bool		isArray;
+		};
+
+	private:
+		std::string											_className;
+		std::vector<ClassMember_t>							_members;
+		std::vector<ClassMember_t>							_staticMembers;
+		std::vector<std::string>							_memberList;
+		std::vector<std::string>							_strIds;
+
+	protected:
+		virtual void CountAllNodes() override;
+
+	public:
+		friend class Method;
+
+		Class(OutputInterface& outIf, Node* top);
+		virtual void ToLua() override;
+		virtual void InitData(const std::vector<std::string>& strings) override;
+		void RegMember(const std::vector<std::string>& mem, bool isStatic);
+		Node* RegMethod(const std::vector<std::string>& met, bool isStatic);
+		std::string GetClassName() const;
+		bool HasNonstaticMember(const std::string& name) const;
+	};
+
+	class Method : public Node
 	{
 	private:
 		std::string					_name;
+		std::string					_returnType;
+		std::vector<std::string>	_args;
+		std::vector<std::string>	_strIds;
+		bool						_isStatic;
+
+	protected:
+		virtual void CountAllNodes() override;
+		bool isStatic() const;
+
+	public:  
+		friend class Class;
+
+		Method(OutputInterface& outIf, Node* top);
+		virtual void ToLua() override;
+		virtual void InitData(const std::vector<std::string>& strings) override;
+		void InsertStringId(const std::string& strId) override;
+		bool HasStringId(const std::string& strId) const override;
+		bool IsStatic() const;
+		std::string GetMethodName() const;
+	};
+
+
+	class Function : public Node
+	{
+	protected:
+		std::string					_name;
+
+	private:
 		std::string					_returnType;
 		std::vector<std::string>	_args;
 		std::vector<std::string>	_strIds;
@@ -175,11 +251,13 @@ namespace cJass
 		virtual void CountAllNodes() override;
 
 	public:
+		friend class Node;
+
 		Function(OutputInterface& outIf, Node* top);
 		virtual void ToLua() override;
 		virtual void InitData(const std::vector<std::string>& strings) override;
-		void InsertStringId(const std::string& strId);
-		bool HasStringId(const std::string& strId) const;
+		void InsertStringId(const std::string& strId) override;
+		bool HasStringId(const std::string& strId) const override;
 	};
 
 	class OperationObject : public Node
@@ -195,6 +273,7 @@ namespace cJass
 			Operator,
 			UnaryOperator,
 			NewLine,
+			empty,
 
 			//Expressions
 			ExitWhen,
@@ -247,6 +326,8 @@ namespace cJass
 
 	protected:
 		virtual void CountAllNodes() override;
+		bool HasNeighbourStrings();
+		std::string GetFullIdName();	//For adding this. in class members/functions
 
 	public:
 		OperationObject(OutputInterface& outIf, Node* top);
@@ -258,7 +339,6 @@ namespace cJass
 		bool BlockClosed() const;
 		void CloseBlock();
 		bool CheckIsString();
-		bool HasNeighbourStrings();
 		ConstType GetConstType() const;
 	};
 
