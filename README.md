@@ -7,6 +7,7 @@ Warcraft III Reforged brought us Lua scripting, but still a lot of map makers fo
 ### Features
 - Analyzing and syntax checking cJass code
 - Full support of JASS/cJASS
+- Analyzing classes/structures and converting them to Lua meta table implementation with maximum compatibility
 - Producing .lua file with converted code of your cJass/JASS code
 - Advanced JASS features such as 'native', 'constant', 'type'
 - emmyDoc option for lua
@@ -25,7 +26,7 @@ Warcraft III Reforged brought us Lua scripting, but still a lot of map makers fo
 - Command line interface
 
 ### Unsupported features
-- Analyzing classes/structures and converting them to Lua meta table implementation (Planned to be implemented soon)
+- Inheritance in structures
 - vJASS features as scopes, modules, etc. are unsupported (and have no sense in Lua)
 - Pre-processor directives
 - cJass 'for' loops are prohibited.
@@ -35,12 +36,13 @@ Warcraft III Reforged brought us Lua scripting, but still a lot of map makers fo
 - Your code is 100% correct
 - Array indexes in Lua started from 1 in some cases. Just note that.
 - You have no objects or classes/structures
+- If structure has constructor (static creator) it must be named as `create` or `new`.
 - String concatecation operator `+` in JASS normally should be replaced with `..` but string globals or functions defined beyond current file are unknown. And in this some cases with unknown in current context string globals or functions operator `+` will be not replaced.
 - Pre-increments or post-increments are supported and can be used in expressions, but for example `a = i++` will be converted into `a = (i + 1)` and `i` will not be incremented. In this cases you need to increment it manually.
 - Read logs if something goes wrong, this application leaves cjass2lua.log file with all it's actions and possible problems. Everything should be fine if you have no warnings.
 
 ### Latest release
-- [v1.08](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.08)
+- [v1.09](https://github.com/fullmetal-a/cjass2lua/releases/tag/v1.09)
 
 ### Manual
 #### GUI

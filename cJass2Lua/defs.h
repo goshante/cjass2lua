@@ -11,7 +11,7 @@
 #pragma warning(disable : 4834)
 
 
-#define APP_VER		"1.08"
+#define APP_VER		"1.09"
 #ifdef _WIN64
 #define APP_BUILD	"x64"
 #else
@@ -99,7 +99,15 @@ namespace cJass
 		For,
 		constant_keyword,
 		native,
-		type_keyword
+		type_keyword,
+		structure,
+		endstruct,
+		method,
+		endmethod,
+		This,
+		priv,
+		pub,
+		Static
 	};
 
 	enum class ParseSpecialSubject
@@ -111,6 +119,7 @@ namespace cJass
 		vjass_func,
 		call,
 		type,
-		constant
+		constant,
+		structure
 	};
 }

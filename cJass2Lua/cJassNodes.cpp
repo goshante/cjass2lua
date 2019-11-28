@@ -9,6 +9,8 @@
 #define PRODUCING_NODE(__node__) case Node::Type::##__node__: \
 			return std::shared_ptr<__node__>(new __node__(outIf, top))
 
+int globalTabMinus = 0;
+
 namespace cJass
 {
 	static OperationObject::ConstType g_prevConst = OperationObject::ConstType::Undefined;
@@ -23,6 +25,8 @@ namespace cJass
 			PRODUCING_NODE(LocalDeclaration);
 			PRODUCING_NODE(GlobalDeclaration);
 			PRODUCING_NODE(TypeDef);
+			PRODUCING_NODE(Class);
+			PRODUCING_NODE(Method);
 		default:
 			throw std::runtime_error("Error! Node RootNode cannot be produced!");
 		}
@@ -165,6 +169,7 @@ namespace cJass
 		if (top != nullptr)
 		{
 			_depthIndex = top->_depthIndex;
+			_root = top->_root;
 			if (top->_subnodes.size() > 0)
 				_topIndex = top->_subnodes.size() - 1;
 		}
@@ -178,6 +183,15 @@ namespace cJass
 	{
 		if (node->_depthIndex == 0)
 			node->_depthIndex = _depthIndex + 1;
+
+		if (this->GetType() == Type::RootNode)
+		{
+			if (node->GetType() == Type::Function)
+				_root->AddGlobalId(node->Ptr<Function>()->_name);
+			else if (node->GetType() == Type::GlobalDeclaration)
+				_root->AddGlobalId(node->Ptr<GlobalDeclaration>()->_varName);
+		}
+		
 		node->_root = _root;
 		_subnodes.push_back(node);
 		ResetIterator();
@@ -226,6 +240,7 @@ namespace cJass
 
 	void Node::PrintTabs(int substract)
 	{
+		substract += globalTabMinus;
 		for (int i = 0; i < _depthIndex - substract; i++)
 			_out << "\t";
 	}
@@ -311,6 +326,24 @@ namespace cJass
 			node->CountAllNodes();
 	}
 
+	void RootNode::AddGlobalId(const std::string& id)
+	{
+		AssertGlobalId(id);
+		_globalIdSet.insert(id);
+	}
+
+	void RootNode::AssertGlobalId(const std::string& id)
+	{
+		if (_globalIdSet.size() == 0)
+			return;
+
+		if (_globalIdSet.find(id) != _globalIdSet.end())
+		{
+			appLog(Warning) << "Redefinition of global identifier" << id << OutputInterface::nl << "Please, rename it and try again.";
+			throw std::runtime_error("RootNode::AddGlobalId: Failed to register global identifier.");
+		}
+	}
+
 	void RootNode::AddNotifyCallback(NotifyCallback callback)
 	{
 		_useCallback = true;
@@ -325,6 +358,7 @@ namespace cJass
 		_notifyCallback = nullptr;
 		_subnodes.clear();
 		_strIds.clear();
+		_globalIdSet.clear();
 		ResetIterator();
 	}
 
@@ -436,6 +470,8 @@ namespace cJass
 		_varName = strings[1];
 		if (_varName == "end")
 			_varName = "end_";
+
+		_root->AssertGlobalId(_varName);
 
 		if (size == 3 && strings[2].find("native") != std::string::npos)
 			_isNative = true;
@@ -696,6 +732,72 @@ namespace cJass
 	{
 	}
 
+	std::string OperationObject::GetFullIdName()
+	{
+		std::string name = _opText;
+		Node::Type mainTopNodeType;
+
+		auto mainNode = Top();
+		while (mainNode->GetType() != Node::Type::Function && mainNode->GetType() != Node::Type::Method)
+		{
+			if (mainNode == nullptr)
+				return name;
+			mainNode = mainNode->Top();
+		}
+		mainTopNodeType = mainNode->GetType();
+
+		if (mainTopNodeType == Node::Type::Function)
+			return name;
+
+		if (mainNode->Ptr<Method>()->IsStatic())
+			return name;
+
+		auto classNode = mainNode->Top();
+
+		if (classNode->Ptr<Class>()->HasNonstaticMember(name))
+		{
+			Node* top = _top;
+			size_t this_index = 9999999;
+			std::vector<std::string> leftNeighbours;
+
+			if (top->CountSubnodes() < 3)
+				return "this." + name;
+
+			for (size_t i = 0; i < top->CountSubnodes(); i++)
+			{
+				auto node = top->AtNode(i);
+
+				if (i >= this_index)
+					break;
+
+				if (node->Ptr() == dynamic_cast<Node*>(this) && this_index == 9999999)
+				{
+					this_index = i;
+					if (i < 2)
+						return "this." + name;
+					i-= 2;
+				}
+
+				if (i == this_index - 1)
+				{
+					node = top->AtNode(i);
+					leftNeighbours.push_back(node->Ptr<OperationObject>()->_opText);
+				}
+
+				if (i == this_index - 2)
+				{
+					node = top->AtNode(i);
+					leftNeighbours.push_back(node->Ptr<OperationObject>()->_opText);
+				}
+			}
+
+			if (leftNeighbours[1] != ".")
+				name = "this." + name;
+		}
+
+		return name;
+	}
+
 	void OperationObject::ToLua()
 	{
 		size_t nodeCount, lastIndex;
@@ -714,11 +816,10 @@ namespace cJass
 			}
 		}
 
-
 		switch (_otype)
 		{
 		case OpType::Id:
-			_out << Utils::const2lua(_opText);
+			_out << GetFullIdName();
 			for (auto& node : _subnodes)
 				node->ToLua();
 			break;
@@ -1018,6 +1119,9 @@ namespace cJass
 			if (Top()->GetType() != Node::Type::RootNode)
 				PrintTabs();
 			break;
+
+		case OpType::empty:
+			break;
 		
 		default:
 			appLog(Warning) << "OperationObject::ToLua: Unsupported OpType.";
@@ -1038,6 +1142,7 @@ namespace cJass
 	{
 		size_t size = strings.size();
 		Node* top = _top;
+		Method* met;
 		
 		if (size == 0 || size > 3)
 		{
@@ -1111,6 +1216,15 @@ namespace cJass
 			break;
 
 		case 'r':
+			if (top->GetType() == Node::Type::Method)
+			{
+				met = top->Ptr<Method>();
+				if (met->GetMethodName() == "create" || met->GetMethodName() == "new")
+				{
+					_otype = OpType::empty;
+					break;
+				}
+			}
 			_otype = OpType::Return;
 			_isWrapper = true;
 			break;
@@ -1458,6 +1572,7 @@ namespace cJass
 	Node* LocalDeclaration::AddVariable(const std::string& name, const std::string& arrSize)
 	{
 		appLog(Debug) << "Adding local variable" << name;
+		_root->AssertGlobalId(name);
 		if (name == "end")
 			_vars.push_back(name + "_");
 		else
@@ -1502,6 +1617,442 @@ namespace cJass
 
 		_nativeName = strings[0];
 		_extends = strings[1];
+	}
+
+	Class::Class(OutputInterface& outIf, Node* top)
+		: Node(outIf, Node::Type::Class, top)
+		, _className("")
+	{
+		_depthIndex++;
+		_memberList.push_back("allocate");
+		_memberList.push_back("deallocate");
+		_memberList.push_back("create");
+		_memberList.push_back("destroy");
+	}
+
+	void Class::CountAllNodes()
+	{
+		_root->IncrementNodeCount(_subnodes.size());
+		for (auto& node : _subnodes)
+			node->CountAllNodes();
+	}
+
+	void Class::ToLua()
+	{
+		bool emmy = Settings::emmyDoc();
+		NodeList staticMethods;
+		NodePtr  creationNode = nullptr;
+		bool onlyMembers = false;
+
+		for (NodeList::iterator node = _subnodes.begin(); node != _subnodes.end(); node++)
+		{
+			if ((*node)->GetType() == Node::Type::Method
+				&& (*node)->Ptr<Method>()->_name == "new" || (*node)->Ptr<Method>()->_name == "create")
+			{
+				creationNode = (*node);
+				std::swap(_subnodes[0], *node);
+				break;
+			}
+		}
+
+		onlyMembers = (creationNode == nullptr);
+
+		std::string createName = "create";
+		if (!onlyMembers)
+			createName = creationNode->Ptr<Method>()->_name;
+
+		_out << OutputInterface::nl;
+		
+		//Declare a class
+		if (emmy)
+			_out << "---@class  " << _className << OutputInterface::nl;
+		_out << _className << " = {}";
+		_out << OutputInterface::nl;
+
+		//Declare static members
+		for (auto& mem : _staticMembers)
+		{
+			if (mem.initValue == "" && !mem.isArray)
+				_out << "-- " << _className << ":" << mem.name;
+			else if (mem.isArray)
+				_out << mem.name << " = {}";
+			else
+				_out << mem.name << " = " << mem.initValue;
+
+			if (emmy)
+				_out << "\t" << "---@type " << mem.type;
+
+		}
+		_out << OutputInterface::nl;
+
+		if (emmy)
+		{
+			std::string tmp;
+			if (!onlyMembers)
+			{
+				for (size_t i = 0; i < creationNode->Ptr<Method>()->_args.size(); i++)
+				{
+					if ((i + 1) % 2 != 0)
+					{
+						tmp = creationNode->Ptr<Method>()->_args[i];
+						continue;
+					}
+
+					if ((i + 1) % 2 == 0)
+						_out << OutputInterface::nl << "---@param " << creationNode->Ptr<Method>()->_args[i] << " " << tmp;
+				}
+			}
+			_out << OutputInterface::nl << "---@return " << _className << OutputInterface::nl;
+		}
+
+		//Print class header
+		_out << "function " << _className << ":" << createName << "(";
+
+		if (!onlyMembers)
+		{
+			//Print .create/.new args
+			size_t argsSize = creationNode->Ptr<Method>()->_args.size();
+			for (size_t i = 0; i < argsSize; i++)
+			{
+				if ((i + 1) % 2 == 0)
+				{
+					auto args = creationNode->Ptr<Method>()->_args[i];
+					_out << creationNode->Ptr<Method>()->_args[i];
+					if (i != argsSize - 1)
+						_out << ", ";
+				}
+			}
+		}
+		_out << ")" << OutputInterface::nl;
+
+		//Print this object creation
+		PrintTabs();
+		_out << "local this = {}";
+
+		//Print non-static members
+		for (auto& mem : _members)
+		{
+			_out << OutputInterface::nl;
+			PrintTabs();
+			if (mem.initValue == "" && !mem.isArray)
+				_out << "-- this." << mem.name;
+			else if (mem.isArray)
+				_out << "this." << mem.name << " = {}";
+			else
+				_out << "this." << mem.name << " = " << mem.initValue;
+
+			if (emmy)
+				_out << "\t" << "---@type " << mem.type;
+
+		}
+		_out << OutputInterface::nl;
+		_out << OutputInterface::nl;
+
+		PrintTabs();
+		_out << "function this:allocate() return this end" << OutputInterface::nl;
+		PrintTabs();
+		_out << "function this:deallocate() end" << OutputInterface::nl;
+
+		if (CountSubnodes() > 1)
+		{
+			//Print non-static methods
+			for (size_t i = 1; i < CountSubnodes(); i++)
+			{
+				auto node = _subnodes[i];
+
+				if (node->Ptr<Method>()->isStatic())
+				{
+					staticMethods.push_back(node);
+					continue;
+				}
+
+				node->ToLua();
+			}
+		}
+
+		_out << OutputInterface::nl;
+
+		if (!onlyMembers)
+		{
+			//Print .create/.new method subnodes
+			globalTabMinus = 1;
+			for (auto& node : creationNode->Ptr<Method>()->_subnodes)
+				node->ToLua();
+			globalTabMinus = 0;
+			_out << OutputInterface::nl;
+		}
+
+		//Print magic meta-table calls
+		PrintTabs();
+		_out << "setmetatable(this, self)" << OutputInterface::nl; PrintTabs();
+		_out << "self.__index = self" << OutputInterface::nl; PrintTabs();
+		_out << "return this" << OutputInterface::nl << "end" << OutputInterface::nl;
+
+		if (CountSubnodes() > 1)
+		{
+			//Print static methods
+			_out << OutputInterface::nl;
+			for (auto& node : staticMethods)
+				node->ToLua();
+		}
+
+		if (_root)
+			_root->TryToCreatePrintNotify();
+	}
+
+	void Class::InitData(const std::vector<std::string>& strings)
+	{
+		size_t size = strings.size();
+		if (size != 1)
+		{
+			appLog(Critical) << "TypeDef::InitData: Wrong set of input data. Got" << size << ", expected" << "1";
+			appLog(Debug) << "Args:" << strings;
+			return;
+		}
+
+		_className = strings[0];
+	}
+
+	void Class::RegMember(const std::vector<std::string>& mem, bool isStatic)
+	{
+		size_t size = mem.size();
+		if (size != 4)
+		{
+			appLog(Critical) << " Class::RegMember: Wrong set of input data. Got" << size << ", expected" << "4";
+			appLog(Debug) << "Args:" << mem;
+			return;
+		}
+
+		_root->AssertGlobalId( mem[2] );
+
+		if (mem[2] == "string")
+			_strIds.push_back(mem[2]);
+
+		if (isStatic)
+			_staticMembers.push_back({ mem[1], mem[2], mem[3], mem[0] == "array" });
+		else
+		{
+			_members.push_back({ mem[1], mem[2], mem[3], mem[0] == "array" });
+			_memberList.push_back( mem[2] );
+		}
+	}
+
+	Node* Class::RegMethod(const std::vector<std::string>& met, bool isStatic)
+	{
+		size_t size = met.size();
+		if (size < 2)
+		{
+			appLog(Critical) << " Class::RegMethod: Wrong set of input data. Got" << size << ", expected" << "2 or more";
+			appLog(Debug) << "Args:" << met;
+			return nullptr;
+		}
+
+		std::vector<std::string> args;
+		std::string static_ = (isStatic ? "static" : "");
+		std::string name = met[1];
+
+		if (met[0] == "string")
+			_strIds.push_back(name);
+
+		_root->AssertGlobalId(name);
+		if (!isStatic)
+			_memberList.push_back(name);
+
+		args.push_back(static_);
+		for (auto& s : met)
+			args.push_back(s);
+
+		auto node = Node::Produce(Node::Type::Method, this, _out);
+		AddSubnode(node);
+		node->InitData(args);
+
+		return node->Ptr();
+	}
+
+	std::string Class::GetClassName() const
+	{
+		return _className;
+	}
+
+	bool Class::HasNonstaticMember(const std::string& name) const
+	{
+		for (auto& m : _memberList)
+		{
+			if (m == name)
+				return true;
+		}
+
+		return false;
+	}
+
+	Method::Method(OutputInterface& outIf, Node* top)
+		: Node(outIf, Node::Type::Method, top)
+		, _name("")
+		, _returnType("")
+		, _isStatic(false)
+	{
+		_depthIndex = 0;
+	}
+
+	void Method::CountAllNodes()
+	{
+		_root->IncrementNodeCount(_subnodes.size());
+		for (auto& node : _subnodes)
+			node->CountAllNodes();
+	}
+
+	bool Method::isStatic() const
+	{
+		return _isStatic;
+	}
+
+	void Method::InsertStringId(const std::string& strId)
+	{
+		_strIds.push_back(strId);
+	}
+
+	bool Method::HasStringId(const std::string& strId) const
+	{
+		for (const auto& str : _strIds)
+		{
+			if (str == strId)
+				return true;
+		}
+		return false;
+	}
+
+	void Method::ToLua()
+	{
+		bool emmy = Settings::emmyDoc();
+		std::string className = _top->Ptr<Class>()->GetClassName();
+
+		if (emmy)
+		{
+			if (_args.size() > 0)
+				_out << OutputInterface::nl;
+			std::string tmp;
+			for (size_t i = 0; i < _args.size(); i++)
+			{
+				if ((i + 1) % 2 != 0)
+				{
+					tmp = _args[i];
+					continue;
+				}
+
+				if ((i + 1) % 2 == 0)
+				{
+					if (!_isStatic)
+					{
+						_out << OutputInterface::nl;
+						PrintTabs(1);
+						_out << "---@param " << _args[i] << " " << tmp;
+					}
+					else
+						_out << OutputInterface::nl << "---@param " << _args[i] << " " << tmp;
+				}
+			}
+			if (!_isStatic)
+			{
+				_out << OutputInterface::nl;
+				PrintTabs(1);
+				_out << "---@return " << _returnType;
+			}
+			else
+				_out << OutputInterface::nl << "---@return " << _returnType;
+		}
+
+		if (!_isStatic)
+		{
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "function " << className << ":" << _name << "(";
+		}
+		else
+			_out << OutputInterface::nl << "function " << "this:" << _name << "(";
+
+		if (_args.size() == 0)
+			_out << ")";
+		else if (_args.size() == 2)
+			_out << _args[1] << ")";
+		else
+		{
+			for (size_t i = 1; i < _args.size(); i++)
+			{
+				if (i % 2 != 0)
+				{
+					_out << _args[i];
+					if (i != _args.size() - 1)
+						_out << ", ";
+					else
+						_out << ")";
+				}
+			}
+		}
+
+		for (auto& node : _subnodes)
+			node->ToLua();
+		if (!_isStatic)
+		{
+			_out << OutputInterface::nl;
+			PrintTabs(1);
+			_out << "end" << OutputInterface::nl;
+		}
+		else
+			_out << OutputInterface::nl << "end" << OutputInterface::nl;
+		
+		if (_root)
+			_root->TryToCreatePrintNotify();
+	}
+
+	bool Method::IsStatic() const
+	{
+		return _isStatic;
+	}
+
+	std::string Method::GetMethodName() const
+	{
+		return _name;
+	}
+
+	void Method::InitData(const std::vector<std::string>& strings)
+	{
+		size_t size = strings.size();
+		if (size < 3)
+		{
+			appLog(Critical) << " Class::RegMember: Wrong set of input data. Got" << size << ", expected" << "3 or more";
+			appLog(Debug) << "Args:" << strings;
+			return;
+		}
+
+		if (_top->GetType() != Node::Type::Class)
+			throw std::runtime_error("Method::InitData: Error, top node must be class. Wrong declaration of method.");
+
+		_root->AssertGlobalId(strings[1]);
+
+		_isStatic = strings[0] == "static";
+		_returnType = strings[1];
+		_name = strings[2];
+
+		bool insStr = false;
+
+		for (auto& strid : Top()->Ptr<Class>()->_strIds)
+			_strIds.push_back(strid);
+
+		std::string tmp;
+		for (size_t i = 3; i < size; i++)
+		{
+			tmp = strings[i];
+			if (tmp == "end")
+				tmp = "end_";
+			_args.push_back(tmp);
+			if (i % 2 != 0 && tmp == "string")
+				insStr = true;
+			if (i % 2 == 0 && insStr)
+			{
+				_strIds.push_back(tmp);
+				insStr = false;
+			}
+		}
 	}
 
 } //namespace cJass
