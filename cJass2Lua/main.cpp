@@ -389,8 +389,8 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		oy += 30;
 		Utils::CreateWindowElement(hwnd, ET_BUTTON, TEXT("Translate"), hInstance, WS_VISIBLE | WS_TABSTOP | BS_FLAT, NULL, HMENU(IDC_BUTTON), ox, oy, 400, 30, false);
 
-		SendDlgItemMessage(hwnd, IDC_INPUT, EM_SETREADONLY, 1, 0);
-		SendDlgItemMessage(hwnd, IDC_OUTPUT, EM_SETREADONLY, 1, 0);
+		//SendDlgItemMessage(hwnd, IDC_INPUT, EM_SETREADONLY, 1, 0);
+		//SendDlgItemMessage(hwnd, IDC_OUTPUT, EM_SETREADONLY, 1, 0);
 
 		//End constructing window
 

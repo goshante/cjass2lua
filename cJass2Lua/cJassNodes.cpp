@@ -737,13 +737,15 @@ namespace cJass
 		std::string name = _opText;
 		Node::Type mainTopNodeType;
 
-		auto mainNode = Top();
-		while (mainNode->GetType() != Node::Type::Function && mainNode->GetType() != Node::Type::Method)
+		Node* mainNode = this;
+		do 
 		{
+			mainNode = mainNode->Top();
 			if (mainNode == nullptr)
 				return name;
-			mainNode = mainNode->Top();
-		}
+		} 
+		while (mainNode->GetType() != Node::Type::Function && mainNode->GetType() != Node::Type::Method);
+
 		mainTopNodeType = mainNode->GetType();
 
 		if (mainTopNodeType == Node::Type::Function)
