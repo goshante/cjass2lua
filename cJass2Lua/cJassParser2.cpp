@@ -163,6 +163,9 @@ namespace cJass
 		if (word == "class" || word == "struct")
 			return word_t::structure;
 
+		if (word == "evaluate")
+			return word_t::evaluate;
+
 		if (word == "endstruct")
 			return word_t::endstruct;
 
@@ -457,8 +460,6 @@ namespace cJass
 		size_t linesTotal = 0;
 		std::shared_ptr<std::function<void(int, int)>> notifyLineCallback;
 		bool useCallback = false;
-		ranges_t comments;
-		ranges_t strings;
 
 		if (lineProgressHandler)
 		{
@@ -473,102 +474,7 @@ namespace cJass
 			return;
 		}
 		
-		size_t r_begin = ~0, r_end = ~0, r_last = ~0;
 		_text = Utils::FileToString(cjassFileName);
-
-		do
-		{
-			r_last = _text.find("\"", r_last + 1);
-			if (r_last == std::string::npos)
-				break;
-
-			if (r_begin == ~0)
-				r_begin = r_last;
-			else
-			{
-				r_end = r_last;
-				strings.push_back({ r_begin, r_end });
-				r_begin = ~0;
-				r_end = ~0;
-			}
-			
-
-		} while (true);
-
-		r_last = ~0;
-		do
-		{
-			if (r_begin == ~0)
-			{
-				r_last = _text.find("//", r_last + 1);
-				if (r_last == std::string::npos)
-					break;
-
-				r_begin = r_last;
-			}
-			else
-			{
-				r_last = _text.find("\n", r_last + 1);
-				if (r_last == std::string::npos)
-				{
-					comments.push_back({ r_begin, _text.length() - 1 });
-					break;
-				}
-
-				r_end = r_last;
-				comments.push_back({ r_begin, r_end });
-				r_begin = ~0;
-				r_end = ~0;
-			}
-		} while (true);
-
-		r_last = ~0;
-		do
-		{
-			if (r_begin == ~0)
-			{
-				r_last = _text.find("/*", r_last + 1);
-				if (r_last == std::string::npos)
-					break;
-
-				r_begin = r_last;
-			}
-			else
-			{
-				r_last = _text.find("*/", r_last + 1);
-				if (r_last == std::string::npos)
-				{
-					comments.push_back({ r_begin, _text.length() - 1 });
-					break;
-				}
-
-				r_end = r_last;
-				comments.push_back({ r_begin, r_end });
-				r_begin = ~0;
-				r_end = ~0;
-			}
-		} while (true);
-
-		auto matches = reu::SearchAll(_text, "\\.evaluate");
-		for (auto& match : matches)
-		{
-			if (RangeCheck(comments, match.Begin()) && RangeCheck(strings, match.Begin()))
-				match.Replace("");
-		}
-
-		matches = reu::SearchAll(_text, "([^a-zA-Z_0-9\\[\\]])\\.");
-		for (auto& match : matches)
-		{
-			if (RangeCheck(comments, match.Begin()) && RangeCheck(strings, match.Begin()))
-				match.Replace("$1");
-		}
-
-		matches = reu::SearchAll(_text, "this\\.");
-		for (auto& match : matches)
-		{
-			if (RangeCheck(comments, match.Begin()) && RangeCheck(strings, match.Begin()))
-				match.Replace("");
-		}
 
 		_activeNode = &_rootNode;
 		_lastAddedNode = _activeNode;
@@ -1488,6 +1394,17 @@ namespace cJass
 					bstack_set_top(allowWrappersStack, false);
 					break;
 
+				case word_t::evaluate:
+					if (_lastAddedNode->GetText() == ".")
+					{
+						_lastAddedNode->InitData({ "_" });
+						if (_lastAddedNode->GetAdjacentNode(false) != nullptr)
+							_lastAddedNode = _lastAddedNode->GetAdjacentNode(false);
+						else
+							_lastAddedNode = _activeNode;
+						break;
+					}
+
 				case word_t::This:
 				case word_t::id:
 					if (isLocalTop && !varAddedStack.top())
@@ -1524,7 +1441,7 @@ namespace cJass
 							}
 						}
 
-						if (_word == "create" && wtype_prev_code == word_t::dot)
+						if (_word == "create" && _lastAddedNode->GetText() == ".")
 							_lastAddedNode->InitData({ "o", ":" });
 
 						_addNode(Node::Type::OperationObject, { "I", _word });
@@ -1616,6 +1533,18 @@ namespace cJass
 					break;
 
 				case word_t::dot:
+					if (_lastAddedNode->GetText() == "this")
+					{
+						_lastAddedNode->InitData({ "_" });
+						break;
+					}
+
+					if (_lastAddedNode->GetType() != Node::Type::OperationObject
+						&& _lastAddedNode->Ptr<OperationObject>()->GetOpType() != OperationObject::OpType::Id)
+					{
+						break;
+					}
+
 					_addNode(Node::Type::OperationObject, { "o", _word });
 					break;
 
@@ -2259,6 +2188,12 @@ namespace cJass
 			}
 
 		parseWordEnd:
+			if (_word == "evaluate" || _word == ".")
+			{
+				_word = "";
+				return;
+			}
+				
 			prevWord = _word;
 			if (wtype != word_t::undefined)
 				wtype_prev = wtype;

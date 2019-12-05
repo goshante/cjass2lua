@@ -222,6 +222,35 @@ namespace cJass
 		return _top;
 	}
 
+	Node* Node::GetAdjacentNode(bool right) const
+	{
+		if (_top == nullptr)
+			return nullptr;
+
+		for (size_t i = 0; i < _top->_subnodes.size(); i++)
+		{
+			if (_top->_subnodes[i]->Ptr() == this)
+			{
+				if (!right)
+				{
+					if (i == 0)
+						return nullptr;
+					else
+						return _top->_subnodes[i - 1]->Ptr();
+				}
+				else
+				{
+					if (i == _top->_subnodes.size() - 1)
+						return nullptr;
+					else
+						return _top->_subnodes[i + 1]->Ptr();
+				}
+			}
+		}
+
+		return nullptr;
+	}
+
 	Node* Node::LastSubnode()
 	{
 		if (_subnodes.size() == 0)
@@ -1122,7 +1151,7 @@ namespace cJass
 				PrintTabs();
 			break;
 
-		case OpType::empty:
+		case OpType::empty:	
 			break;
 		
 		default:
@@ -1322,6 +1351,12 @@ namespace cJass
 			_otype = OpType::NewLine;
 			break;
 
+		case '_':
+			_otype = OpType::empty;
+			_opText = "";
+			_isWrapper = false;
+			break;
+
 		default:
 			appLog(Warning) << "OperationObject::InitData: unknown key.";
 		}
@@ -1436,6 +1471,11 @@ namespace cJass
 	OperationObject::ConstType OperationObject::GetConstType() const
 	{
 		return _cType;
+	}
+
+	std::string OperationObject::GetText() const
+	{
+		return _opText;
 	}
 
 	OperationObject::OpType OperationObject::GetOpType() const

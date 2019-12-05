@@ -11,7 +11,7 @@
 #pragma warning(disable : 4834)
 
 
-#define APP_VER		"1.10"
+#define APP_VER		"1.11"
 #ifdef _WIN64
 #define APP_BUILD	"x64"
 #else
@@ -107,7 +107,8 @@ namespace cJass
 		This,
 		priv,
 		pub,
-		Static
+		Static,
+		evaluate
 	};
 
 	enum class ParseSpecialSubject
@@ -122,23 +123,4 @@ namespace cJass
 		constant,
 		structure
 	};
-
-	struct range_t
-	{
-		size_t begin;
-		size_t end;
-	};
-
-	using ranges_t = std::vector<range_t>;
-
-	inline bool RangeCheck(const ranges_t& ranges, size_t n)
-	{
-		for (auto& r : ranges)
-		{
-			if (n >= r.begin && n <= r.end)
-				return false;
-		}
-
-		return true;
-	}
 }
