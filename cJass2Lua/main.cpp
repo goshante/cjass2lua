@@ -265,6 +265,30 @@ void parse_thisThread(const std::string& in, const std::string& out)
 			else if (!Utils::dirExists(out))
 				SHCreateDirectoryEx(NULL, out.c_str(), NULL);
 
+			int fileCounter = 0;
+			int filesTotal = 0;
+
+			for (auto& entry : fs::directory_iterator(in))
+			{
+				fname = entry.path().u8string();
+				if (Utils::dirExists(fname))
+					continue;
+
+				if (!Utils::strEndsWith(fname, ".txt")
+					&& !Utils::strEndsWith(fname, ".j")
+					&& !Utils::strEndsWith(fname, ".jass")
+					&& !Utils::strEndsWith(fname, ".cjass")
+					&& !Utils::strEndsWith(fname, ".vjass")
+					&& !Utils::strEndsWith(fname, ".cj")
+					&& !Utils::strEndsWith(fname, ".vj")
+					&& !Utils::strEndsWith(fname, ".jj")
+					&& !Utils::strEndsWith(fname, ".w3j")
+					&& !Utils::strEndsWith(fname, ".w3cj"))
+					continue;
+
+				filesTotal++;
+			}
+
 			for (auto& entry : fs::directory_iterator(in))
 			{
 				status = "Status: Parsing file ";
@@ -289,7 +313,8 @@ void parse_thisThread(const std::string& in, const std::string& out)
 				status += reu::IndexSubstr(fname, fname.find_last_of("\\/") + 1, fname.length() - 1) + " ...";
 				status2 += reu::IndexSubstr(fname, fname.find_last_of("\\/") + 1, fname.length() - 1) + " ...";
 
-				std::cout << "Parsing file " << fname << " ..." << std::endl;
+				fileCounter++;
+				std::cout << "Parsing file(" << fileCounter << "/" << filesTotal << ") " << fname << " ..." << std::endl;
 				_parser->Parse(fname);
 				std::cout << "Writing code... " << std::endl;
 				_parser->ToLua(out);
@@ -453,14 +478,12 @@ int main()
 					out = szArgList[2];
 				std::cout << "Starting parser..." << std::endl;
 				parse_thisThread(szArgList[1], out);
-				system("pause");
 				return 0;
 			}
 			catch (const std::exception& ex)
 			{
 				appLog(Fatal) << ex.what();
 				std::cout << "Error: " << ex.what() << std::endl;
-				system("pause");
 				return -1;
 			}
 		}

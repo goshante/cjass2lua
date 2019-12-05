@@ -115,7 +115,7 @@ namespace reu
 			return true;
 		};
 
-		auto atou = [](const char *a) -> size_t
+		auto atou = [](const char* a) -> size_t
 		{
 			size_t u = 0;
 			size_t t(1);
@@ -254,7 +254,7 @@ namespace reu
 		return _groups[n - 1];
 	}
 
-	match_t::range_t match_t::GetGroupRange(size_t n)
+	range_t match_t::GetGroupRange(size_t n)
 	{
 		if (n == 0)
 			return { _begin, _end };
@@ -275,19 +275,111 @@ namespace reu
 		return ((_end - _begin) + 1);
 	}
 
+	std::string match_t::PatternExplode(const std::string& pattern) const
+	{
+		std::string insertion;
+		auto isInt = [](const std::string& str) -> bool
+		{
+			std::string nums = "0123456789";
+
+			for (size_t i = 0; i < str.length(); i++)
+			{
+				if (nums.find(str[i]) == std::string::npos)
+					return false;
+			}
+
+			return true;
+		};
+
+		auto atou = [](const char* a) -> size_t
+		{
+			size_t u = 0;
+			size_t t(1);
+
+			for (size_t i = strlen(a) - 1; i >= 0; --i)
+			{
+				if (a[i] >= '0' && a[i] <= '9')
+				{
+					u += (a[i] - '0') * t;
+					t *= 10;
+				}
+			}
+
+			return u;
+		};
+
+		bool parsingFlag = false;
+		bool bracketOpened = false;
+		std::string sNum;
+		size_t iNum;
+		for (size_t i = 0; i < pattern.size(); i++)
+		{
+			if (!parsingFlag)
+			{
+				if (bracketOpened)
+				{
+					if (isInt(sNum))
+					{
+						iNum = atou(sNum.c_str());
+
+						if (iNum == 0)
+							insertion += IndexSubstr(*_str, _begin, _end);
+						else
+							insertion += _groups[iNum - 1];
+					}
+					sNum = "";
+					bracketOpened = false;
+				}
+				if ((pattern[i] != '$') || (pattern[i] == '$' && i > 0 && pattern[i - 1] == '\\'))
+					insertion.push_back(pattern[i]);
+				else
+					parsingFlag = true;
+			}
+			else
+			{
+				if (pattern[i - 1] == '$' && pattern[i] == '[' && !bracketOpened)
+				{
+					bracketOpened = true;
+					sNum = "";
+					continue;
+				}
+
+				if (!bracketOpened)
+				{
+					parsingFlag = false;
+					bracketOpened = false;
+					sNum.push_back(pattern[i]);
+				}
+				else
+				{
+					if (pattern[i] == ']')
+						parsingFlag = false;
+					else
+						sNum.push_back(pattern[i]);
+				}
+			}
+		}
+
+		return insertion;
+	}
+
 	//matches_t
-	matches_t::matches_t()
+	matches_t::matches_t(std::string& strref)
+		: _str(&strref)
 	{
 	}
 
 	matches_t::matches_t(const matches_t& copy)
-		: _mvec(copy._mvec)
+		: _str(copy._str)
+		, _mvec(copy._mvec)
+
 	{
 	}
 
 	matches_t& matches_t::operator=(const matches_t& copy)
 	{
 		_mvec = copy._mvec;
+		_str = copy._str;
 		return *this;
 	}
 
@@ -309,17 +401,15 @@ namespace reu
 
 	void matches_t::ReplaceAll(const std::string& pattern)
 	{
-		for (auto& m : _mvec)
-			m.Replace(pattern);
+		//this function is broken and must be re-implemented
 	}
 
-	void matches_t::ExcludeIndexRange(match_t::range_t range)
+	void matches_t::ExcludeIndexRange(range_t range)
 	{
 		for (auto it = _mvec.begin(); it != _mvec.end(); it++)
 		{
 			auto& m = *it;
-			if (m.Begin() >= range.begin && m.Begin() <= range.end ||
-				m.End() >= range.begin && m.End() <= range.end)
+			if (range.isInRange(m.Begin()) || range.isInRange(m.End()))
 			{
 				_mvec.erase(it);
 				it = _mvec.begin();
@@ -327,20 +417,10 @@ namespace reu
 		}
 	}
 
-	void matches_t::ExcludeIndexRanges(std::vector<match_t::range_t>& ranges)
-	{
-		for (auto& r : ranges)
-		{
-			ExcludeIndexRange(r);
-		}
-	}
-
 	void matches_t::ExcludeIndexRanges(ranges_t& ranges)
 	{
 		for (auto& r : ranges)
-		{
 			ExcludeIndexRange(r);
-		}
 	}
 
 	std::vector<match_t>::iterator matches_t::begin()
@@ -378,7 +458,7 @@ namespace reu
 		std::regex exp(rf.re, rf.flags);
 		std::smatch sm;
 		std::vector<std::string> groups;
-		std::vector<match_t::range_t> ranges;
+		std::vector<range_t> ranges;
 		size_t begin = std::string::npos;
 		size_t end = std::string::npos;
 		std::string offstr = "";
@@ -386,11 +466,11 @@ namespace reu
 
 
 
-		auto countGroupRange = [](const std::smatch::value_type& g, const std::string& str, size_t offset) -> match_t::range_t
+		auto countGroupRange = [](const std::smatch::value_type& g, const std::string& str, size_t offset) -> range_t
 		{
 			size_t i = 0;
 			int n = 0;
-			match_t::range_t range = { std::string::npos, std::string::npos };
+			range_t range = { std::string::npos, std::string::npos };
 			for (auto it = str.begin(); it != str.end(); it++)
 			{
 				if (it == g.first)
@@ -457,7 +537,7 @@ namespace reu
 
 	matches_t SearchAll(std::string& str, const std::string re, size_t offset)
 	{
-		matches_t ms;
+		matches_t ms(str);
 		match_t m = Search(str, re, offset);
 
 		if (!m.IsMatching())
@@ -495,6 +575,17 @@ namespace reu
 		}
 
 		return replaces;
+	}
+
+	bool RangeCheck(const ranges_t& ranges, size_t n)
+	{
+		for (auto r : ranges)
+		{
+			if (r.isInRange(n))
+				return true;
+		}
+
+		return false;
 	}
 
 } //namespace reu
