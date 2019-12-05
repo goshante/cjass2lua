@@ -457,6 +457,8 @@ namespace cJass
 		size_t linesTotal = 0;
 		std::shared_ptr<std::function<void(int, int)>> notifyLineCallback;
 		bool useCallback = false;
+		ranges_t comments;
+		ranges_t strings;
 
 		if (lineProgressHandler)
 		{
@@ -471,14 +473,107 @@ namespace cJass
 			return;
 		}
 		
+		size_t r_begin = ~0, r_end = ~0, r_last = ~0;
 		_text = Utils::FileToString(cjassFileName);
+
+		do
+		{
+			r_last = _text.find("\"", r_last + 1);
+			if (r_last == std::string::npos)
+				break;
+
+			if (r_begin == ~0)
+				r_begin = r_last;
+			else
+			{
+				r_end = r_last;
+				strings.push_back({ r_begin, r_end });
+				r_begin = ~0;
+				r_end = ~0;
+			}
+			
+
+		} while (true);
+
+		r_last = ~0;
+		do
+		{
+			if (r_begin == ~0)
+			{
+				r_last = _text.find("//", r_last + 1);
+				if (r_last == std::string::npos)
+					break;
+
+				r_begin = r_last;
+			}
+			else
+			{
+				r_last = _text.find("\n", r_last + 1);
+				if (r_last == std::string::npos)
+				{
+					comments.push_back({ r_begin, _text.length() - 1 });
+					break;
+				}
+
+				r_end = r_last;
+				comments.push_back({ r_begin, r_end });
+				r_begin = ~0;
+				r_end = ~0;
+			}
+		} while (true);
+
+		r_last = ~0;
+		do
+		{
+			if (r_begin == ~0)
+			{
+				r_last = _text.find("/*", r_last + 1);
+				if (r_last == std::string::npos)
+					break;
+
+				r_begin = r_last;
+			}
+			else
+			{
+				r_last = _text.find("*/", r_last + 1);
+				if (r_last == std::string::npos)
+				{
+					comments.push_back({ r_begin, _text.length() - 1 });
+					break;
+				}
+
+				r_end = r_last;
+				comments.push_back({ r_begin, r_end });
+				r_begin = ~0;
+				r_end = ~0;
+			}
+		} while (true);
+
+		auto matches = reu::SearchAll(_text, "\\.evaluate");
+		for (auto& match : matches)
+		{
+			if (RangeCheck(comments, match.Begin()) && RangeCheck(strings, match.Begin()))
+				match.Replace("");
+		}
+
+		matches = reu::SearchAll(_text, "([^a-zA-Z_0-9\\[\\]])\\.");
+		for (auto& match : matches)
+		{
+			if (RangeCheck(comments, match.Begin()) && RangeCheck(strings, match.Begin()))
+				match.Replace("$1");
+		}
+
+		matches = reu::SearchAll(_text, "this\\.");
+		for (auto& match : matches)
+		{
+			if (RangeCheck(comments, match.Begin()) && RangeCheck(strings, match.Begin()))
+				match.Replace("");
+		}
+
 		_activeNode = &_rootNode;
 		_lastAddedNode = _activeNode;
 		_rootNode.Clear();
 		_customTypeNames.clear();
-		reu::ReplaceAll(_text, "\\.evaluate", "");
-		reu::ReplaceAll(_text, "([^a-zA-Z_0-9\\[\\]])\\.", "$1");
-		reu::ReplaceAll(_text, "this\\.", "");
 		auto lt = reu::SearchAll(_text, "[\\n]");
 		linesTotal = lt.Count() + 1;
 		_fileName = cjassFileName;

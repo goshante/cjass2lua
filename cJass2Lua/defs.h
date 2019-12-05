@@ -122,4 +122,23 @@ namespace cJass
 		constant,
 		structure
 	};
+
+	struct range_t
+	{
+		size_t begin;
+		size_t end;
+	};
+
+	using ranges_t = std::vector<range_t>;
+
+	inline bool RangeCheck(const ranges_t& ranges, size_t n)
+	{
+		for (auto& r : ranges)
+		{
+			if (n >= r.begin && n <= r.end)
+				return false;
+		}
+
+		return true;
+	}
 }
