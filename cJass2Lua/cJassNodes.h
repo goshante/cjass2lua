@@ -89,6 +89,8 @@ namespace cJass
 		virtual void InitData(const std::vector<std::string>& strings) = 0;
 		virtual void InsertStringId(const std::string& strId) {}
 		virtual bool HasStringId(const std::string& strId) const { return false;  }
+		virtual std::string GetText() const { return ""; }
+		Node* GetAdjacentNode(bool right) const;
 	};
 
 	class RootNode : public Node
@@ -340,6 +342,7 @@ namespace cJass
 		void CloseBlock();
 		bool CheckIsString();
 		ConstType GetConstType() const;
+		virtual std::string GetText() const override;
 	};
 
 	class LocalDeclaration : public Node
